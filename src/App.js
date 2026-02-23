@@ -380,6 +380,47 @@ function TechView({products,blends,transactions,techs,techName,setTechName,onSav
   return null;
 }
 
+function TeamView({techs,onSaveTechs,showToast,iS}){
+  const [newName,setNewName]=useState("");
+  const add=()=>{
+    const n=newName.trim();
+    if(!n)return;
+    if((techs||[]).map(t=>t.toLowerCase()).includes(n.toLowerCase())){showToast("That name already exists.","error");return;}
+    onSaveTechs([...(techs||[]),n]);
+    setNewName("");
+    showToast(`${n} added to team`);
+  };
+  return(
+    <div style={{animation:"fadeUp 0.3s ease",maxWidth:500}}>
+      <div style={{marginBottom:20}}>
+        <h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Team</h1>
+        <p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>Manage the tech names that appear on the daily log screen</p>
+      </div>
+      <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",overflow:"hidden",marginBottom:16}}>
+        {(!techs||techs.length===0)
+          ? <div style={{padding:28,textAlign:"center",color:"#9ca3af",fontSize:14}}>No techs added yet.</div>
+          : techs.map((name,i)=>(
+            <div key={name} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",borderBottom:i<techs.length-1?"1px solid #f3f4f6":"none"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:34,height:34,borderRadius:99,background:"linear-gradient(135deg,#2d6a2d,#4a9e4a)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>{name[0]}</div>
+                <span style={{fontWeight:600,fontSize:15,color:"#111827"}}>{name}</span>
+              </div>
+              <button onClick={()=>onSaveTechs(techs.filter(t=>t!==name))} style={{background:"#fee2e2",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:12,color:"#dc2626",fontFamily:"inherit",fontWeight:600}}>Remove</button>
+            </div>
+          ))
+        }
+      </div>
+      <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",padding:"18px 20px"}}>
+        <div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:12}}>Add Team Member</div>
+        <div style={{display:"flex",gap:10}}>
+          <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="First name" style={{...iS,flex:1}} autoComplete="off"/>
+          <Btn onClick={add}>Add</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // MANAGER VIEW
 // ════════════════════════════════════════════════════════════════════════════
@@ -642,46 +683,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
         )}
 
         {view==="team"&&(
-          <div style={{animation:"fadeUp 0.3s ease",maxWidth:500}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
-              <div><h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Team</h1><p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>Manage the tech names that appear on the daily log screen</p></div>
-            </div>
-            <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",overflow:"hidden",marginBottom:16}}>
-              {techs.length===0
-                ? <div style={{padding:28,textAlign:"center",color:"#9ca3af",fontSize:14}}>No techs added yet.</div>
-                : techs.map((name,i)=>(
-                  <div key={name} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",borderBottom:i<techs.length-1?"1px solid #f3f4f6":"none"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:12}}>
-                      <div style={{width:34,height:34,borderRadius:99,background:"linear-gradient(135deg,#2d6a2d,#4a9e4a)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>{name[0]}</div>
-                      <span style={{fontWeight:600,fontSize:15,color:"#111827"}}>{name}</span>
-                    </div>
-                    <button onClick={()=>onSaveTechs(techs.filter(t=>t!==name))} style={{background:"#fee2e2",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:12,color:"#dc2626",fontFamily:"inherit",fontWeight:600}}>Remove</button>
-                  </div>
-                ))
-              }
-            </div>
-            {/* Add tech form */}
-            {(()=>{
-              const [newName,setNewName]=useState("");
-              const add=()=>{
-                const n=newName.trim();
-                if(!n)return;
-                if(techs.map(t=>t.toLowerCase()).includes(n.toLowerCase()))return showToast("That name already exists.","error");
-                onSaveTechs([...techs,n]);
-                setNewName("");
-                showToast(`${n} added to team`);
-              };
-              return(
-                <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",padding:"18px 20px"}}>
-                  <div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:12}}>Add Team Member</div>
-                  <div style={{display:"flex",gap:10}}>
-                    <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="First name" style={{...iS,flex:1}} autoComplete="off"/>
-                    <Btn onClick={add}>Add</Btn>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
+          <TeamView techs={techs} onSaveTechs={onSaveTechs} showToast={showToast} iS={iS}/>
         )}
 
         {view==="settings"&&(
