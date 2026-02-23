@@ -165,7 +165,7 @@ function PasscodeModal({onSuccess,onCancel}){
 // ════════════════════════════════════════════════════════════════════════════
 // TECH VIEW
 // ════════════════════════════════════════════════════════════════════════════
-function TechView({products,blends,transactions,techName,setTechName,onSave,onManagerRequest}){
+function TechView({products,blends,transactions,techs,techName,setTechName,onSave,onManagerRequest}){
   const [screen,setScreen]=useState(techName?"log":"landing");
   const [logDate,setLogDate]=useState(today());
   const [entries,setEntries]=useState([{type:"product",id:"",amount:""}]);
@@ -259,7 +259,7 @@ function TechView({products,blends,transactions,techName,setTechName,onSave,onMa
       <div style={{padding:"0 20px",animation:"fadeUp 0.4s ease"}}>
         <p style={{color:"#8faf8f",fontSize:13,fontWeight:600,textAlign:"center",marginBottom:14,letterSpacing:"0.05em",textTransform:"uppercase"}}>Who's logging?</p>
         <div style={{display:"flex",flexDirection:"column",gap:10,maxWidth:420,margin:"0 auto"}}>
-          {TECHS.map(name=>(
+          {(techs||[]).map(name=>(
             <button key={name} className="tech-btn" onClick={()=>selectTech(name)} style={{background:"rgba(255,255,255,0.07)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>
               <div style={{display:"flex",alignItems:"center",gap:14}}>
                 <div style={{width:38,height:38,borderRadius:99,background:"linear-gradient(135deg,#2d6a2d,#4a9e4a)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff"}}>{name[0]}</div>
@@ -383,7 +383,7 @@ function TechView({products,blends,transactions,techName,setTechName,onSave,onMa
 // ════════════════════════════════════════════════════════════════════════════
 // MANAGER VIEW
 // ════════════════════════════════════════════════════════════════════════════
-function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,onSaveProducts}){
+function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onExit,onSaveProducts,onSaveTechs}){
   const [view,setView]=useState("dashboard");
   const [modal,setModal]=useState(null);
   const [editTarget,setEditTarget]=useState(null);
@@ -474,7 +474,7 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
     showToast("Exported to CSV");
   };
 
-  const navItems=[{k:"dashboard",l:"Dashboard",i:"◈"},{k:"inventory",l:"Inventory",i:"⊞"},{k:"blends",l:"Blends",i:"🧬"},{k:"history",l:"History",i:"↺"},{k:"settings",l:"Settings",i:"⚙"}];
+  const navItems=[{k:"dashboard",l:"Dashboard",i:"◈"},{k:"inventory",l:"Inventory",i:"⊞"},{k:"blends",l:"Blends",i:"🧬"},{k:"history",l:"History",i:"↺"},{k:"team",l:"Team",i:"👥"},{k:"settings",l:"Settings",i:"⚙"}];
 
   return(
     <div style={{minHeight:"100vh",background:"#eef2ee",display:"flex"}}>
@@ -545,14 +545,23 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search products…" style={{...iS,width:260,marginBottom:14}}/>
             <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",overflow:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead><tr style={{background:"#f9fafb"}}>{["Product","Containers","Container Size","Total Volume","Mix Rate","Cost/Container","Total Value",""].map(h=><th key={h} style={{padding:"10px 13px",textAlign:"left",fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",borderBottom:"1px solid #e5e7eb",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                <thead><tr style={{background:"#f9fafb"}}>{["Product","Stock Status","Containers","Total Volume","Mix Rate","Cost/Container","Total Value",""].map(h=><th key={h} style={{padding:"10px 13px",textAlign:"left",fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",borderBottom:"1px solid #e5e7eb",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                 <tbody>
                   {filtP.map(p=>{
                     const inB=blends.filter(b=>b.product_ids.includes(p.id));
-                    return(<tr key={p.id} className="trow" style={{borderBottom:"1px solid #f3f4f6",transition:"background 0.12s"}}>
+                    const lvl=p.containers<=0?"critical":p.containers<0.5?"low":"ok";
+                    const lvlColor=lvl==="critical"?"#dc2626":lvl==="low"?"#d97706":"#166534";
+                    const lvlBg=lvl==="critical"?"#fee2e2":lvl==="low"?"#fff7ed":"#f0fdf4";
+                    const lvlLabel=lvl==="critical"?"⚠ Out of stock":lvl==="low"?"⚠ Low stock":"✓ In stock";
+                    return(<tr key={p.id} className="trow" style={{borderBottom:"1px solid #f3f4f6",transition:"background 0.12s",background:lvl==="critical"?"#fff8f8":lvl==="low"?"#fffdf5":"#fff"}}>
                       <td style={{padding:"10px 13px",fontWeight:600,color:"#111827",maxWidth:220}}><div>{p.name}</div>{inB.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:3}}>{inB.map(b=><span key={b.id} style={{fontSize:10,background:b.color+"18",color:b.color,padding:"1px 6px",borderRadius:99,fontWeight:700}}>🧬 {b.name}</span>)}</div>}</td>
-                      <td style={{padding:"10px 13px",color:"#374151",fontWeight:700}}>{fmtN(p.containers,3)}</td>
-                      <td style={{padding:"10px 13px",color:"#6b7280",whiteSpace:"nowrap"}}>{p.container_size} {p.container_unit}</td>
+                      <td style={{padding:"10px 13px",whiteSpace:"nowrap"}}>
+                        <div style={{marginBottom:4}}><span style={{background:lvlBg,color:lvlColor,padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:700}}>{lvlLabel}</span></div>
+                        <div style={{display:"flex",alignItems:"center",gap:6"}}>
+                          <div style={{background:"#e5e7eb",borderRadius:99,height:4,width:80,flexShrink:0}}><div style={{background:lvlColor,width:`${Math.min(100,p.containers*25)}%`,height:"100%",borderRadius:99,transition:"width 0.3s"}}/></div>
+                          <span style={{fontSize:11,color:"#6b7280",whiteSpace:"nowrap"}}>{fmtN(p.containers,2)} containers</span>
+                        </div>
+                      </td>
                       <td style={{padding:"10px 13px",color:"#374151",whiteSpace:"nowrap"}}>{fmtN(totalVol(p))} {p.mix_unit||p.container_unit}</td>
                       <td style={{padding:"10px 13px",whiteSpace:"nowrap"}}>{p.mix_rate?<span style={{background:"#f0fdf4",color:"#166534",padding:"2px 7px",borderRadius:99,fontWeight:700,fontSize:11}}>{p.mix_rate} {p.mix_unit}/{p.mix_per}</span>:<span style={{color:"#d1d5db"}}>Direct</span>}</td>
                       <td style={{padding:"10px 13px",color:"#374151"}}>{fmt$(p.cost_per_container)}</td>
@@ -629,6 +638,49 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {view==="team"&&(
+          <div style={{animation:"fadeUp 0.3s ease",maxWidth:500}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+              <div><h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Team</h1><p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>Manage the tech names that appear on the daily log screen</p></div>
+            </div>
+            <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",overflow:"hidden",marginBottom:16}}>
+              {techs.length===0
+                ? <div style={{padding:28,textAlign:"center",color:"#9ca3af",fontSize:14}}>No techs added yet.</div>
+                : techs.map((name,i)=>(
+                  <div key={name} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",borderBottom:i<techs.length-1?"1px solid #f3f4f6":"none"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{width:34,height:34,borderRadius:99,background:"linear-gradient(135deg,#2d6a2d,#4a9e4a)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>{name[0]}</div>
+                      <span style={{fontWeight:600,fontSize:15,color:"#111827"}}>{name}</span>
+                    </div>
+                    <button onClick={()=>onSaveTechs(techs.filter(t=>t!==name))} style={{background:"#fee2e2",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:12,color:"#dc2626",fontFamily:"inherit",fontWeight:600}}>Remove</button>
+                  </div>
+                ))
+              }
+            </div>
+            {/* Add tech form */}
+            {(()=>{
+              const [newName,setNewName]=useState("");
+              const add=()=>{
+                const n=newName.trim();
+                if(!n)return;
+                if(techs.map(t=>t.toLowerCase()).includes(n.toLowerCase()))return showToast("That name already exists.","error");
+                onSaveTechs([...techs,n]);
+                setNewName("");
+                showToast(`${n} added to team`);
+              };
+              return(
+                <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",padding:"18px 20px"}}>
+                  <div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:12}}>Add Team Member</div>
+                  <div style={{display:"flex",gap:10}}>
+                    <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="First name" style={{...iS,flex:1}} autoComplete="off"/>
+                    <Btn onClick={add}>Add</Btn>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -754,10 +806,13 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
 // ════════════════════════════════════════════════════════════════════════════
 // ROOT — Supabase data layer
 // ════════════════════════════════════════════════════════════════════════════
+const SEED_TECHS = ["Alex","Jordan","Marcus","Sam","Taylor"];
+
 export default function App() {
   const [products, setProducts]         = useState(null);
   const [blends, setBlends]             = useState(null);
   const [transactions, setTransactions] = useState(null);
+  const [techs, setTechs]               = useState(null);
   const [mode, setMode]                 = useState("tech");
   const [showPasscode, setShowPasscode] = useState(false);
   const [techName, setTechName]         = useState("");
@@ -767,11 +822,12 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        // Load all three tables in parallel
-        const [pr, bl, tr] = await Promise.all([
+        // Load all four tables in parallel
+        const [pr, bl, tr, tc] = await Promise.all([
           supabase.from("products").select("*").order("id"),
           supabase.from("blends").select("*").order("id"),
           supabase.from("transactions").select("*").order("id", { ascending: false }),
+          supabase.from("techs").select("*").order("sort_order"),
         ]);
         if (pr.error || bl.error || tr.error) throw pr.error || bl.error || tr.error;
 
@@ -789,6 +845,18 @@ export default function App() {
           setBlends(SEED_BLENDS);
         } else {
           setBlends(bl.data);
+        }
+        // Seed techs if empty
+        if (!tc.error && tc.data.length === 0) {
+          const seedRows = SEED_TECHS.map((name, i) => ({ name, sort_order: i }));
+          const { error: tSeedErr } = await supabase.from("techs").insert(seedRows);
+          if (tSeedErr) throw tSeedErr;
+          setTechs(SEED_TECHS);
+        } else if (!tc.error) {
+          setTechs(tc.data.map(t => t.name));
+        } else {
+          // techs table may not exist yet — fall back to defaults
+          setTechs(SEED_TECHS);
         }
         setTransactions(tr.data);
       } catch (err) {
@@ -871,6 +939,17 @@ export default function App() {
     setBlends(updatedBlends);
   }, [blends]);
 
+  const saveTechs = useCallback(async (updatedTechs) => {
+    // Delete all existing and re-insert in order (simplest approach for a small list)
+    await supabase.from("techs").delete().neq("name", "__none__");
+    if (updatedTechs.length > 0) {
+      const rows = updatedTechs.map((name, i) => ({ name, sort_order: i }));
+      const { error } = await supabase.from("techs").insert(rows);
+      if (error) { console.error(error); return; }
+    }
+    setTechs(updatedTechs);
+  }, []);
+
   if (error) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",flexDirection:"column",gap:16,padding:24,textAlign:"center"}}>
       <div style={{fontSize:32}}>⚠️</div>
@@ -879,7 +958,7 @@ export default function App() {
     </div>
   );
 
-  if (!products || !blends || !transactions) return <Spinner />;
+  if (!products || !blends || !transactions || !techs) return <Spinner />;
 
   return (
     <>
@@ -887,6 +966,7 @@ export default function App() {
       {mode === "tech" && (
         <TechView
           products={products} blends={blends} transactions={transactions}
+          techs={techs}
           techName={techName} setTechName={setTechName}
           onSave={saveProductsAndTxns}
           onManagerRequest={() => setShowPasscode(true)}
@@ -895,9 +975,11 @@ export default function App() {
       {mode === "manager" && (
         <ManagerView
           products={products} blends={blends} transactions={transactions}
+          techs={techs}
           onSave={saveProductsAndTxns}
           onSaveBlends={saveBlends}
           onSaveProducts={saveProducts}
+          onSaveTechs={saveTechs}
           onExit={() => setMode("tech")}
         />
       )}
