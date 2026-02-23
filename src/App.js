@@ -421,6 +421,42 @@ function TeamView({techs,onSaveTechs,showToast,iS}){
   );
 }
 
+function BlendCard({b, products, onEdit, onDelete}){
+  const [exp, setExp] = useState(false);
+  const comps = products.filter(p => b.product_ids.includes(p.id));
+  return(
+    <div style={{background:"#fff",borderRadius:14,border:"1.5px solid #e5e7eb",overflow:"hidden",marginBottom:12}}>
+      <div style={{height:4,background:b.color}}/>
+      <div style={{padding:"13px 16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}>
+              <span>🧬</span>
+              <span style={{fontWeight:700,fontSize:15,color:"#111827"}}>{b.name}</span>
+              <span style={{background:b.color+"22",color:b.color,fontSize:10,fontWeight:700,padding:"1px 7px",borderRadius:99}}>BLEND</span>
+            </div>
+            {b.description&&<div style={{fontSize:13,color:"#6b7280",marginBottom:4}}>{b.description}</div>}
+            <div style={{fontSize:13,color:"#374151"}}><span style={{fontWeight:600}}>{comps.length} products</span></div>
+          </div>
+          <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:10}}>
+            <button onClick={()=>setExp(e=>!e)} style={{background:"#f3f4f6",border:"none",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:600}}>{exp?"▲":"▼"}</button>
+            <button onClick={()=>onEdit(b)} style={{background:"#f3f4f6",border:"none",borderRadius:6,padding:"5px 7px",cursor:"pointer",fontSize:12}}>✏️</button>
+            <button onClick={()=>onDelete(b.id)} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"5px 7px",cursor:"pointer",fontSize:12}}>🗑️</button>
+          </div>
+        </div>
+        {exp&&<div style={{marginTop:10,borderTop:"1px solid #f3f4f6",paddingTop:10}}>
+          {comps.map((p,i)=>(
+            <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 9px",background:i%2===0?"#f9fafb":"#fff",borderRadius:6,marginBottom:3}}>
+              <span style={{fontSize:13,color:"#374151"}}>{p.name}</span>
+              <span style={{fontSize:12,fontWeight:700,color:"#166534",background:"#f0fdf4",padding:"2px 7px",borderRadius:5,whiteSpace:"nowrap",marginLeft:8}}>{p.mix_rate?`${p.mix_rate} ${p.mix_unit}/${p.mix_per}`:"Direct"}</span>
+            </div>
+          ))}
+        </div>}
+      </div>
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // MANAGER VIEW
 // ════════════════════════════════════════════════════════════════════════════
@@ -621,24 +657,9 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
           <div style={{animation:"fadeUp 0.3s ease",maxWidth:680}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}><div><h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Product Blends</h1><p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>Multi-product blends techs can log as a single item</p></div><Btn onClick={openAddB}>+ New Blend</Btn></div>
             {blends.length===0?<div style={{background:"#fff",borderRadius:14,border:"2px dashed #d1d5db",padding:36,textAlign:"center",color:"#9ca3af"}}><div style={{fontSize:28,marginBottom:8}}>🧬</div><div style={{fontWeight:600,marginBottom:4}}>No blends yet</div></div>
-            :blends.map(b=>{
-              const [exp,setExp]=useState(false);
-              const comps=products.filter(p=>b.product_ids.includes(p.id));
-              return(<div key={b.id} style={{background:"#fff",borderRadius:14,border:"1.5px solid #e5e7eb",overflow:"hidden",marginBottom:12}}>
-                <div style={{height:4,background:b.color}}/>
-                <div style={{padding:"13px 16px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                    <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}><span>🧬</span><span style={{fontWeight:700,fontSize:15,color:"#111827"}}>{b.name}</span><span style={{background:b.color+"22",color:b.color,fontSize:10,fontWeight:700,padding:"1px 7px",borderRadius:99}}>BLEND</span></div>{b.description&&<div style={{fontSize:13,color:"#6b7280",marginBottom:4}}>{b.description}</div>}<div style={{fontSize:13,color:"#374151"}}><span style={{fontWeight:600}}>{comps.length} products</span></div></div>
-                    <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:10}}>
-                      <button onClick={()=>setExp(e=>!e)} style={{background:"#f3f4f6",border:"none",borderRadius:6,padding:"5px 9px",cursor:"pointer",fontSize:12,fontFamily:"inherit",fontWeight:600}}>{exp?"▲":"▼"}</button>
-                      <button onClick={()=>openEditB(b)} style={{background:"#f3f4f6",border:"none",borderRadius:6,padding:"5px 7px",cursor:"pointer",fontSize:12}}>✏️</button>
-                      <button onClick={()=>delBlend(b.id)} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"5px 7px",cursor:"pointer",fontSize:12}}>🗑️</button>
-                    </div>
-                  </div>
-                  {exp&&<div style={{marginTop:10,borderTop:"1px solid #f3f4f6",paddingTop:10}}>{comps.map((p,i)=><div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 9px",background:i%2===0?"#f9fafb":"#fff",borderRadius:6,marginBottom:3}}><span style={{fontSize:13,color:"#374151"}}>{p.name}</span><span style={{fontSize:12,fontWeight:700,color:"#166534",background:"#f0fdf4",padding:"2px 7px",borderRadius:5,whiteSpace:"nowrap",marginLeft:8}}>{p.mix_rate?`${p.mix_rate} ${p.mix_unit}/${p.mix_per}`:"Direct"}</span></div>)}</div>}
-                </div>
-              </div>);
-            })}
+            :blends.map(b=>(
+              <BlendCard key={b.id} b={b} products={products} onEdit={openEditB} onDelete={delBlend}/>
+            ))}
           </div>
         )}
 
