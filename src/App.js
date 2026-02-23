@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { supabase } from './supabase';
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
@@ -658,7 +658,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
                 <thead><tr style={{background:"#f9fafb"}}>{["Date","Type","Product / Blend","Tech","Input","Details","Cost"].map(h=><th key={h} style={{padding:"10px 13px",textAlign:"left",fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",borderBottom:"1px solid #e5e7eb"}}>{h}</th>)}</tr></thead>
                 <tbody>
                   {transactions.filter(t=>(!dateFrom||t.date>=dateFrom)&&(!dateTo||t.date<=dateTo)).map(t=>(
-                    <React.Fragment key={t.id}>
+                    <Fragment key={t.id}>
                       <tr className="trow" style={{borderBottom:t.subtype==="blend"?"none":"1px solid #f3f4f6",transition:"background 0.12s"}}>
                         <td style={{padding:"10px 13px",color:"#6b7280",whiteSpace:"nowrap"}}>{fmtDate(t.date)}</td>
                         <td style={{padding:"10px 13px"}}><span style={{background:t.subtype==="blend"?"#fdf4ff":t.type==="usage"?"#fee2e2":"#d1fae5",color:t.subtype==="blend"?"#7e22ce":t.type==="usage"?"#991b1b":"#065f46",padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:700}}>{t.subtype==="blend"?"BLEND":t.type.toUpperCase()}</span></td>
@@ -673,7 +673,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
                           <td style={{padding:"4px 13px"}}/><td/><td style={{padding:"4px 13px",fontSize:12,color:"#7e22ce",paddingLeft:26}}>↳ {c.product_name}</td><td/><td style={{padding:"4px 13px",fontSize:12,color:"#6b7280"}}>via blend</td><td style={{padding:"4px 13px",fontSize:12,color:"#dc2626",fontWeight:600}}>−{fmtN(c.product_used)} {c.product_unit}</td><td style={{padding:"4px 13px",fontSize:12,color:"#6b7280"}}>{fmt$(c.product_cost)}</td>
                         </tr>
                       ))}
-                    </React.Fragment>
+                    </Fragment>
                   ))}
                   {transactions.filter(t=>(!dateFrom||t.date>=dateFrom)&&(!dateTo||t.date<=dateTo)).length===0&&<tr><td colSpan={7} style={{textAlign:"center",padding:32,color:"#9ca3af"}}>No transactions in range.</td></tr>}
                 </tbody>
