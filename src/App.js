@@ -557,7 +557,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
                       <td style={{padding:"10px 13px",fontWeight:600,color:"#111827",maxWidth:220}}><div>{p.name}</div>{inB.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:3}}>{inB.map(b=><span key={b.id} style={{fontSize:10,background:b.color+"18",color:b.color,padding:"1px 6px",borderRadius:99,fontWeight:700}}>🧬 {b.name}</span>)}</div>}</td>
                       <td style={{padding:"10px 13px",whiteSpace:"nowrap"}}>
                         <div style={{marginBottom:4}}><span style={{background:lvlBg,color:lvlColor,padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:700}}>{lvlLabel}</span></div>
-                        <div style={{display:"flex",alignItems:"center",gap:6"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
                           <div style={{background:"#e5e7eb",borderRadius:99,height:4,width:80,flexShrink:0}}><div style={{background:lvlColor,width:`${Math.min(100,p.containers*25)}%`,height:"100%",borderRadius:99,transition:"width 0.3s"}}/></div>
                           <span style={{fontSize:11,color:"#6b7280",whiteSpace:"nowrap"}}>{fmtN(p.containers,2)} containers</span>
                         </div>
