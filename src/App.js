@@ -634,11 +634,9 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
                       <td style={{padding:"10px 13px",fontWeight:600,color:"#111827",maxWidth:220}}><div>{p.name}</div>{inB.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:3}}>{inB.map(b=><span key={b.id} style={{fontSize:10,background:b.color+"18",color:b.color,padding:"1px 6px",borderRadius:99,fontWeight:700}}>🧬 {b.name}</span>)}</div>}</td>
                       <td style={{padding:"10px 13px",whiteSpace:"nowrap"}}>
                         <div style={{marginBottom:4}}><span style={{background:lvlBg,color:lvlColor,padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:700}}>{lvlLabel}</span></div>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <div style={{background:"#e5e7eb",borderRadius:99,height:4,width:80,flexShrink:0}}><div style={{background:lvlColor,width:`${Math.min(100,p.containers*25)}%`,height:"100%",borderRadius:99,transition:"width 0.3s"}}/></div>
-                          <span style={{fontSize:11,color:"#6b7280",whiteSpace:"nowrap"}}>{fmtN(p.containers,2)} containers</span>
-                        </div>
+                        <div style={{background:"#e5e7eb",borderRadius:99,height:4,width:80}}><div style={{background:lvlColor,width:`${Math.min(100,p.containers*25)}%`,height:"100%",borderRadius:99,transition:"width 0.3s"}}/></div>
                       </td>
+                      <td style={{padding:"10px 13px",color:"#374151",fontWeight:700,whiteSpace:"nowrap"}}>{fmtN(p.containers,2)} <span style={{fontSize:11,color:"#9ca3af",fontWeight:400}}>{p.container_unit}</span></td>
                       <td style={{padding:"10px 13px",color:"#374151",whiteSpace:"nowrap"}}>{fmtN(totalVol(p))} {p.mix_unit||p.container_unit}</td>
                       <td style={{padding:"10px 13px",whiteSpace:"nowrap"}}>{p.mix_rate?<span style={{background:"#f0fdf4",color:"#166534",padding:"2px 7px",borderRadius:99,fontWeight:700,fontSize:11}}>{p.mix_rate} {p.mix_unit}/{p.mix_per}</span>:<span style={{color:"#d1d5db"}}>Direct</span>}</td>
                       <td style={{padding:"10px 13px",color:"#374151"}}>{fmt$(p.cost_per_container)}</td>
@@ -647,7 +645,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
                     </tr>);
                   })}
                 </tbody>
-                <tfoot><tr style={{background:"#f9fafb",borderTop:"2px solid #e5e7eb"}}><td colSpan={6} style={{padding:"10px 13px",fontWeight:700,color:"#374151"}}>Total Inventory Value</td><td style={{padding:"10px 13px",fontWeight:700,color:"#1a2e1a",fontSize:14,fontFamily:"'Playfair Display',serif"}}>{fmt$(totalVal)}</td><td/></tr></tfoot>
+                <tfoot><tr style={{background:"#f9fafb",borderTop:"2px solid #e5e7eb"}}><td colSpan={7} style={{padding:"10px 13px",fontWeight:700,color:"#374151"}}>Total Inventory Value</td><td style={{padding:"10px 13px",fontWeight:700,color:"#1a2e1a",fontSize:14,fontFamily:"'Playfair Display',serif"}}>{fmt$(totalVal)}</td><td/></tr></tfoot>
               </table>
             </div>
           </div>
