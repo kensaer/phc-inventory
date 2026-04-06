@@ -866,6 +866,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
           </div>
         </Modal>
       )}
+      {modal==="changePC"&&(
         <Modal title="Change Passcode" onClose={()=>setModal(null)}>
           <FF label="New Passcode"><input type="password" style={iS} value={form.np||""} onChange={e=>setForm(f=>({...f,np:e.target.value}))} placeholder="Min 4 characters"/></FF>
           <FF label="Confirm"><input type="password" style={iS} value={form.cp||""} onChange={e=>setForm(f=>({...f,cp:e.target.value}))} placeholder="Repeat passcode"/></FF>
