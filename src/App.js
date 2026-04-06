@@ -208,7 +208,7 @@ function TechView({products,blends,transactions,techs,techName,setTechName,onSav
     setScreen("success");
   };
 
-  const filtP=products.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
+  const filtP=products.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name));
   const hdr=(title,back,right)=>(
     <div style={{background:"linear-gradient(135deg,#1a2e1a,#2d4a2d)",padding:"18px 16px",position:"sticky",top:0,zIndex:10}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",maxWidth:500,margin:"0 auto"}}>
@@ -475,7 +475,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
   const totalVal=products.reduce((s,p)=>s+(p.containers*(p.cost_per_container||0)),0);
   const filtUsage=transactions.filter(t=>t.type==="usage"&&(!dateFrom||t.date>=dateFrom)&&(!dateTo||t.date<=dateTo));
   const usageCost=filtUsage.reduce((s,t)=>s+(t.product_cost||0),0);
-  const filtP=products.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
+  const filtP=products.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name));
 
   const openLogUsage=()=>{setForm({date:today(),entries:[{type:"product",id:products[0]?.id||"",amount:""}]});setModal("logUsage");};
   const addUR=()=>setForm(f=>({...f,entries:[...f.entries,{type:"product",id:products[0]?.id||"",amount:""}]}));
@@ -540,6 +540,40 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
     setSaving(false);setModal(null);
   };
   const delBlend=async(id)=>{await onSaveBlends(blends.filter(b=>b.id!==id));showToast("Blend removed");};
+
+  const deleteTransaction=async(t)=>{
+    setSaving(true);
+    // Reverse inventory impact for usage transactions
+    if(t.type==="usage"){
+      const updP=[...products];
+      if(t.subtype==="blend"&&t.components?.length){
+        // Restore each component product
+        for(const comp of t.components){
+          const pi=updP.findIndex(p=>p.id===comp.product_id);
+          if(pi===-1)continue;
+          const upc=updP[pi].container_size*(updP[pi].conversion_rate||1);
+          const containersToRestore=upc>0?comp.product_used/upc:0;
+          updP[pi]={...updP[pi],containers:updP[pi].containers+containersToRestore};
+        }
+      } else if(t.product_id){
+        // Restore single product
+        const pi=updP.findIndex(p=>p.id===t.product_id);
+        if(pi!==-1){
+          const upc=updP[pi].container_size*(updP[pi].conversion_rate||1);
+          const containersToRestore=upc>0?t.product_used/upc:0;
+          updP[pi]={...updP[pi],containers:updP[pi].containers+containersToRestore};
+        }
+      }
+      // Save restored inventory
+      const {error:pErr}=await supabase.from("products").upsert(updP);
+      if(pErr){setSaving(false);showToast("Failed to restore inventory.","error");return;}
+    }
+    // Delete the transaction record
+    const {error}=await supabase.from("transactions").delete().eq("id",t.id);
+    if(error){setSaving(false);showToast("Failed to delete entry.","error");return;}
+    showToast(t.type==="usage"?"Entry deleted and inventory restored":"Entry deleted");
+    setSaving(false);setModal(null);setEditTarget(null);
+  };
 
   const openChangePC=()=>{setForm({np:"",cp:""});setModal("changePC");};
   const submitChangePC=()=>{if(form.np.length<4)return showToast("Min 4 characters.","error");if(form.np!==form.cp)return showToast("Passcodes don't match.","error");setPC(form.np);showToast("Passcode updated");setModal(null);};
@@ -674,7 +708,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
             </div>
             <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",overflow:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead><tr style={{background:"#f9fafb"}}>{["Date","Type","Product / Blend","Tech","Input","Details","Cost"].map(h=><th key={h} style={{padding:"10px 13px",textAlign:"left",fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",borderBottom:"1px solid #e5e7eb"}}>{h}</th>)}</tr></thead>
+                <thead><tr style={{background:"#f9fafb"}}>{["Date","Type","Product / Blend","Tech","Input","Details","Cost",""].map(h=><th key={h} style={{padding:"10px 13px",textAlign:"left",fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",borderBottom:"1px solid #e5e7eb"}}>{h}</th>)}</tr></thead>
                 <tbody>
                   {transactions.filter(t=>(!dateFrom||t.date>=dateFrom)&&(!dateTo||t.date<=dateTo)).map(t=>(
                     <Fragment key={t.id}>
@@ -686,10 +720,11 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
                         <td style={{padding:"10px 13px",color:"#374151",whiteSpace:"nowrap"}}>{t.type==="usage"?`${t.input_amount} ${t.input_unit}`:`+${t.containers_added} containers`}</td>
                         <td style={{padding:"10px 13px",fontWeight:700,whiteSpace:"nowrap",color:t.type==="usage"?"#dc2626":"#16a34a"}}>{t.type==="usage"&&!t.subtype&&`−${fmtN(t.product_used)} ${t.product_unit}`}{t.subtype==="blend"&&<span style={{color:"#7e22ce",fontSize:12}}>{t.components?.length} products ▾</span>}{t.type==="restock"&&`+${fmtN(t.containers_added*t.container_size)} ${t.container_unit}`}</td>
                         <td style={{padding:"10px 13px",color:"#374151"}}>{fmt$(t.product_cost||t.total_cost_added)}</td>
+                        <td style={{padding:"10px 10px",whiteSpace:"nowrap"}}><button onClick={()=>setModal("confirmDelete")||setEditTarget(t)} style={{background:"#fee2e2",border:"none",borderRadius:5,padding:"4px 7px",cursor:"pointer",fontSize:12,color:"#dc2626"}}>🗑️</button></td>
                       </tr>
                       {t.subtype==="blend"&&t.components?.map((c,ci)=>(
                         <tr key={`${t.id}-${ci}`} style={{background:"#faf5ff",borderBottom:ci===t.components.length-1?"1px solid #f3f4f6":"none"}}>
-                          <td style={{padding:"4px 13px"}}/><td/><td style={{padding:"4px 13px",fontSize:12,color:"#7e22ce",paddingLeft:26}}>↳ {c.product_name}</td><td/><td style={{padding:"4px 13px",fontSize:12,color:"#6b7280"}}>via blend</td><td style={{padding:"4px 13px",fontSize:12,color:"#dc2626",fontWeight:600}}>−{fmtN(c.product_used)} {c.product_unit}</td><td style={{padding:"4px 13px",fontSize:12,color:"#6b7280"}}>{fmt$(c.product_cost)}</td>
+                          <td style={{padding:"4px 13px"}}/><td/><td style={{padding:"4px 13px",fontSize:12,color:"#7e22ce",paddingLeft:26}}>↳ {c.product_name}</td><td/><td style={{padding:"4px 13px",fontSize:12,color:"#6b7280"}}>via blend</td><td style={{padding:"4px 13px",fontSize:12,color:"#dc2626",fontWeight:600}}>−{fmtN(c.product_used)} {c.product_unit}</td><td style={{padding:"4px 13px",fontSize:12,color:"#6b7280"}}>{fmt$(c.product_cost)}</td><td/>
                         </tr>
                       ))}
                     </Fragment>
@@ -812,7 +847,25 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
           <div style={{display:"flex",gap:10,marginTop:14}}><Btn onClick={submitBlend} disabled={saving} style={{flex:1}}>{saving?"Saving…":editTarget?"Save Changes":"Create Blend"}</Btn><Btn onClick={()=>setModal(null)} color="ghost">Cancel</Btn></div>
         </Modal>
       )}
-      {modal==="changePC"&&(
+      {modal==="confirmDelete"&&editTarget&&(
+        <Modal title="Delete Entry" onClose={()=>{setModal(null);setEditTarget(null);}}>
+          <div style={{marginBottom:18}}>
+            <div style={{fontSize:14,color:"#374151",marginBottom:8}}>
+              Are you sure you want to delete this transaction?
+              {editTarget.type==="usage"&&<span style={{color:"#166534",fontWeight:600}}> Inventory will be restored.</span>}
+              {editTarget.type==="restock"&&<span style={{color:"#6b7280"}}> Inventory will not be adjusted.</span>}
+            </div>
+            <div style={{background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:8,padding:"11px 14px",fontSize:13}}>
+              <div style={{fontWeight:700,color:"#111827",marginBottom:3}}>{editTarget.blend_name||editTarget.product_name}</div>
+              <div style={{color:"#6b7280"}}>{fmtDate(editTarget.date)}{editTarget.tech_name?` · ${editTarget.tech_name}`:""} · {fmt$(editTarget.product_cost||editTarget.total_cost_added)}</div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <Btn onClick={()=>deleteTransaction(editTarget)} color="red" disabled={saving} style={{flex:1}}>{saving?"Deleting…":"Yes, Delete"}</Btn>
+            <Btn onClick={()=>{setModal(null);setEditTarget(null);}} color="ghost">Cancel</Btn>
+          </div>
+        </Modal>
+      )}
         <Modal title="Change Passcode" onClose={()=>setModal(null)}>
           <FF label="New Passcode"><input type="password" style={iS} value={form.np||""} onChange={e=>setForm(f=>({...f,np:e.target.value}))} placeholder="Min 4 characters"/></FF>
           <FF label="Confirm"><input type="password" style={iS} value={form.cp||""} onChange={e=>setForm(f=>({...f,cp:e.target.value}))} placeholder="Repeat passcode"/></FF>
