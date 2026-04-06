@@ -720,7 +720,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
                         <td style={{padding:"10px 13px",color:"#374151",whiteSpace:"nowrap"}}>{t.type==="usage"?`${t.input_amount} ${t.input_unit}`:`+${t.containers_added} containers`}</td>
                         <td style={{padding:"10px 13px",fontWeight:700,whiteSpace:"nowrap",color:t.type==="usage"?"#dc2626":"#16a34a"}}>{t.type==="usage"&&!t.subtype&&`−${fmtN(t.product_used)} ${t.product_unit}`}{t.subtype==="blend"&&<span style={{color:"#7e22ce",fontSize:12}}>{t.components?.length} products ▾</span>}{t.type==="restock"&&`+${fmtN(t.containers_added*t.container_size)} ${t.container_unit}`}</td>
                         <td style={{padding:"10px 13px",color:"#374151"}}>{fmt$(t.product_cost||t.total_cost_added)}</td>
-                        <td style={{padding:"10px 10px",whiteSpace:"nowrap"}}><button onClick={()=>setModal("confirmDelete")||setEditTarget(t)} style={{background:"#fee2e2",border:"none",borderRadius:5,padding:"4px 7px",cursor:"pointer",fontSize:12,color:"#dc2626"}}>🗑️</button></td>
+                        <td style={{padding:"10px 10px",whiteSpace:"nowrap"}}><button onClick={()=>{setEditTarget(t);setModal("confirmDelete");}} style={{background:"#fee2e2",border:"none",borderRadius:5,padding:"4px 7px",cursor:"pointer",fontSize:12,color:"#dc2626"}}>🗑️</button></td>
                       </tr>
                       {t.subtype==="blend"&&t.components?.map((c,ci)=>(
                         <tr key={`${t.id}-${ci}`} style={{background:"#faf5ff",borderBottom:ci===t.components.length-1?"1px solid #f3f4f6":"none"}}>
