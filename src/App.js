@@ -310,7 +310,7 @@ function TechView({products,blends,transactions,techs,techName,setTechName,onSav
                 <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:7}}>{isB?"Blend":"Product"}{entries.length>1?` #${i+1}`:""}</div>
                 <select style={{...iSM,marginBottom:10,paddingRight:40}} value={entry.id} onChange={e=>updE(i,"id",e.target.value)}>
                   <option value="">Select {isB?"a blend":"a product"}…</option>
-                  {isB?blends.map(b=><option key={b.id} value={b.id}>{b.name}</option>):products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                  {isB?[...blends].sort((a,b)=>a.name.localeCompare(b.name)).map(b=><option key={b.id} value={b.id}>{b.name}</option>):[...products].sort((a,b)=>a.name.localeCompare(b.name)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
                 {isB&&blend&&<div style={{background:"#fdf4ff",border:"1px solid #e9d5ff",borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:12}}><div style={{fontWeight:700,color:"#7e22ce",marginBottom:3}}>Contains {bComps.length} products:</div>{bComps.map(p=><div key={p.id} style={{color:"#6b21a8",marginBottom:1}}>· {p.name} <span style={{color:"#a855f7"}}>({p.mix_rate} {p.mix_unit}/{p.mix_per})</span></div>)}</div>}
                 {!isB&&product&&<div style={{background:product.mix_rate?"#f0fdf4":"#f8faff",border:`1px solid ${product.mix_rate?"#bbf7d0":"#dbeafe"}`,borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:13}}>{product.mix_rate?<span style={{color:"#166534"}}>🧪 Mix: <strong>{product.mix_rate} {product.mix_unit} / {product.mix_per}</strong> — enter gal of mix</span>:<span style={{color:"#1e40af"}}>💉 Direct — enter <strong>{product.mix_unit||product.container_unit}</strong></span>}</div>}
@@ -359,14 +359,14 @@ function TechView({products,blends,transactions,techs,techName,setTechName,onSav
   );
 
   if(screen==="cheatsheet"){
-    const mixP=products.filter(p=>p.mix_rate),dirP=products.filter(p=>!p.mix_rate);
+    const mixP=products.filter(p=>p.mix_rate).sort((a,b)=>a.name.localeCompare(b.name)),dirP=products.filter(p=>!p.mix_rate).sort((a,b)=>a.name.localeCompare(b.name));
     return(
       <div style={{minHeight:"100vh",background:"#f0f4f0"}}>
         {hdr("Mix Rate Guide",()=>setScreen(techName?"log":"landing"))}
         <div style={{padding:"16px",maxWidth:500,margin:"0 auto"}}>
           {blends.length>0&&<>
             <div style={{fontSize:11,fontWeight:700,color:"#7e22ce",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>🧬 Blends</div>
-            {blends.map(b=>{const comps=products.filter(p=>b.product_ids.includes(p.id));return(<div key={b.id} style={{background:"#fff",borderRadius:14,padding:"13px 16px",marginBottom:10,border:`1.5px solid ${b.color}44`,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:0,left:0,right:0,height:3,background:b.color}}/><div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:6}}>{b.name}</div>{comps.map(p=><div key={p.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:3}}><span style={{color:"#374151"}}>· {p.name.length>30?p.name.slice(0,30)+"…":p.name}</span><strong style={{color:b.color,whiteSpace:"nowrap",marginLeft:8}}>{p.mix_rate} {p.mix_unit}/{p.mix_per}</strong></div>)}</div>);})}
+            {[...blends].sort((a,b)=>a.name.localeCompare(b.name)).map(b=>{const comps=products.filter(p=>b.product_ids.includes(p.id));return(<div key={b.id} style={{background:"#fff",borderRadius:14,padding:"13px 16px",marginBottom:10,border:`1.5px solid ${b.color}44`,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:0,left:0,right:0,height:3,background:b.color}}/><div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:6}}>{b.name}</div>{comps.map(p=><div key={p.id} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:3}}><span style={{color:"#374151"}}>· {p.name.length>30?p.name.slice(0,30)+"…":p.name}</span><strong style={{color:b.color,whiteSpace:"nowrap",marginLeft:8}}>{p.mix_rate} {p.mix_unit}/{p.mix_per}</strong></div>)}</div>);})}
             <div style={{marginBottom:18}}/>
           </>}
           <div style={{fontSize:11,fontWeight:700,color:"#4a9e4a",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>🧪 Mixed Products</div>
@@ -585,6 +585,30 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
     showToast("Exported to CSV");
   };
 
+  const exportUsageCSV=()=>{
+    const rangeLabel=`${dateFrom||"start"}_to_${dateTo||today()}`;
+    const rows=[[`PHC Usage History — ${dateFrom||"start"} to ${dateTo||today()}`],[],["Date","Type","Product / Blend","Tech","Input","Used","Unit","Cost"]];
+    filtUsage.forEach(t=>{
+      if(t.subtype==="blend"){
+        rows.push([t.date,"BLEND",t.blend_name||"",t.tech_name||"",`${t.input_amount} gal mix`,"","",fmt$(t.product_cost||0)]);
+        (t.components||[]).forEach(c=>rows.push([t.date,"  └ component",c.product_name||"",t.tech_name||"","",fmtN(c.product_used),c.product_unit||"",fmt$(c.product_cost||0)]));
+      }else{
+        rows.push([t.date,"USAGE",t.product_name||"",t.tech_name||"",`${t.input_amount} ${t.input_unit||""}`,fmtN(t.product_used),t.product_unit||"",fmt$(t.product_cost||0)]);
+      }
+    });
+    const csv=rows.map(r=>r.map(c=>`"${c}"`).join(",")).join("\n");
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`PHC_Usage_${rangeLabel}.csv`;a.click();
+    showToast("Exported usage history to CSV");
+  };
+
+  const exportInventoryCSV=()=>{
+    const sorted=[...products].sort((a,b)=>a.name.localeCompare(b.name));
+    const rows=[[`PHC Inventory — ${new Date().toLocaleDateString()}`],[],["Product","Containers","Container Size","Unit","Total Volume","Mix Rate","Cost/Container","Total Value"],...sorted.map(p=>[p.name,p.containers,p.container_size,p.container_unit,`${fmtN(totalVol(p))} ${p.mix_unit||p.container_unit}`,p.mix_rate?`${p.mix_rate} ${p.mix_unit}/${p.mix_per}`:"Direct",p.cost_per_container||"",(p.containers*(p.cost_per_container||0)).toFixed(2)]),[""],["Total Inventory Value","","","","","","",fmt$(totalVal)]];
+    const csv=rows.map(r=>r.map(c=>`"${c}"`).join(",")).join("\n");
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`PHC_Inventory_${today()}.csv`;a.click();
+    showToast("Exported inventory to CSV");
+  };
+
   const navItems=[{k:"dashboard",l:"Dashboard",i:"◈"},{k:"inventory",l:"Inventory",i:"⊞"},{k:"blends",l:"Blends",i:"🧬"},{k:"history",l:"History",i:"↺"},{k:"team",l:"Team",i:"👥"},{k:"settings",l:"Settings",i:"⚙"}];
 
   return(
@@ -652,7 +676,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
 
         {view==="inventory"&&(
           <div style={{animation:"fadeUp 0.3s ease"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}><div><h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Inventory</h1><p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>{products.length} products · {fmt$(totalVal)}</p></div><Btn onClick={openAddP}>+ Add Product</Btn></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}><div><h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Inventory</h1><p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>{products.length} products · {fmt$(totalVal)}</p></div><div style={{display:"flex",gap:8}}><Btn onClick={exportInventoryCSV} color="ghost">↓ Export CSV</Btn><Btn onClick={openAddP}>+ Add Product</Btn></div></div>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search products…" style={{...iS,width:260,marginBottom:14}}/>
             <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",overflow:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
@@ -670,7 +694,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
                         <div style={{marginBottom:4}}><span style={{background:lvlBg,color:lvlColor,padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:700}}>{lvlLabel}</span></div>
                         <div style={{background:"#e5e7eb",borderRadius:99,height:4,width:80}}><div style={{background:lvlColor,width:`${Math.min(100,p.containers*25)}%`,height:"100%",borderRadius:99,transition:"width 0.3s"}}/></div>
                       </td>
-                      <td style={{padding:"10px 13px",color:"#374151",fontWeight:700,whiteSpace:"nowrap"}}>{fmtN(p.containers,2)} <span style={{fontSize:11,color:"#9ca3af",fontWeight:400}}>{p.container_unit}</span></td>
+                      <td style={{padding:"10px 13px",color:"#374151",fontWeight:700,whiteSpace:"nowrap"}}>{fmtN(p.containers,2)}</td>
                       <td style={{padding:"10px 13px",color:"#374151",whiteSpace:"nowrap"}}>{fmtN(totalVol(p))} {p.mix_unit||p.container_unit}</td>
                       <td style={{padding:"10px 13px",whiteSpace:"nowrap"}}>{p.mix_rate?<span style={{background:"#f0fdf4",color:"#166534",padding:"2px 7px",borderRadius:99,fontWeight:700,fontSize:11}}>{p.mix_rate} {p.mix_unit}/{p.mix_per}</span>:<span style={{color:"#d1d5db"}}>Direct</span>}</td>
                       <td style={{padding:"10px 13px",color:"#374151"}}>{fmt$(p.cost_per_container)}</td>
@@ -697,7 +721,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
 
         {view==="history"&&(
           <div style={{animation:"fadeUp 0.3s ease"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}><div><h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Transaction History</h1><p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>{transactions.length} total</p></div><Btn onClick={exportCSV}>↓ Export CSV</Btn></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}><div><h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Transaction History</h1><p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>{transactions.length} total</p></div><Btn onClick={exportUsageCSV}>↓ Export CSV</Btn></div>
             <div style={{background:"#fff",borderRadius:10,border:"1px solid #e5e7eb",padding:"10px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
               <span style={{fontSize:13,fontWeight:700,color:"#374151"}}>Filter:</span>
               <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{...iS,width:145,fontSize:13}}/>
@@ -767,7 +791,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
               {form.entries.length>1&&<button onClick={()=>remUR(i)} style={{position:"absolute",top:9,right:9,background:"#fee2e2",border:"none",borderRadius:5,padding:"2px 6px",cursor:"pointer",fontSize:12,color:"#dc2626"}}>×</button>}
               <div style={{display:"flex",gap:8,marginBottom:10}}>{[["product","Single Product"],["blend","Blend 🧬"]].map(([val,lbl])=><button key={val} onClick={()=>updUR(i,"type",val)} style={{flex:1,padding:"6px",borderRadius:7,border:`1.5px solid ${entry.type===val?"#4a9e4a":"#e5e7eb"}`,background:entry.type===val?"#f0fdf4":"#fff",color:entry.type===val?"#166534":"#6b7280",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:"pointer"}}>{lbl}</button>)}</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <FF label={isB?"Blend":"Product"}><select style={iS} value={entry.id} onChange={e=>updUR(i,"id",e.target.value)}><option value="">Select…</option>{isB?blends.map(b=><option key={b.id} value={b.id}>{b.name}</option>):products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></FF>
+                <FF label={isB?"Blend":"Product"}><select style={iS} value={entry.id} onChange={e=>updUR(i,"id",e.target.value)}><option value="">Select…</option>{isB?[...blends].sort((a,b)=>a.name.localeCompare(b.name)).map(b=><option key={b.id} value={b.id}>{b.name}</option>):[...products].sort((a,b)=>a.name.localeCompare(b.name)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></FF>
                 <FF label={isB||product?.mix_rate?"Gal of Mix":`Amount (${product?.mix_unit||product?.container_unit||"units"})`}><input type="number" style={iS} value={entry.amount} onChange={e=>updUR(i,"amount",e.target.value)} placeholder="0" min="0" step="any"/></FF>
               </div>
               {entry.amount>0&&isB&&blend&&<div style={{background:"#fdf4ff",border:"1px solid #e9d5ff",borderRadius:7,padding:"8px 11px",fontSize:12}}><div style={{fontWeight:700,color:"#7e22ce",marginBottom:4}}>🧬 Deductions for {entry.amount} gal:</div>{products.filter(p=>blend.product_ids.includes(p.id)).map(p=><div key={p.id} style={{display:"flex",justifyContent:"space-between",color:"#6b21a8",marginBottom:2}}><span>{p.name.length>34?p.name.slice(0,34)+"…":p.name}</span><strong>−{fmtN(calcUsed(p,entry.amount))} {p.mix_unit||p.container_unit}</strong></div>)}</div>}
@@ -780,7 +804,7 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
       )}
       {modal==="restock"&&(
         <Modal title="Log Restock" onClose={()=>setModal(null)}>
-          <FF label="Product"><select style={iS} value={form.productId} onChange={e=>setForm(f=>({...f,productId:e.target.value}))}>{products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></FF>
+          <FF label="Product"><select style={iS} value={form.productId} onChange={e=>setForm(f=>({...f,productId:e.target.value}))}>{[...products].sort((a,b)=>a.name.localeCompare(b.name)).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></FF>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <FF label="Containers Added"><input type="number" style={iS} value={form.containersAdded} onChange={e=>setForm(f=>({...f,containersAdded:e.target.value}))} placeholder="e.g. 2" min="0" step="any"/></FF>
             <FF label="Date"><input type="date" style={iS} value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/></FF>
