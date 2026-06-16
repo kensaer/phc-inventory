@@ -163,6 +163,147 @@ function PasscodeModal({onSuccess,onCancel}){
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// CALCULATORS SCREEN
+// ════════════════════════════════════════════════════════════════════════════
+function CalcCard({title,color,children}){
+  return(
+    <div style={{background:"#fff",borderRadius:16,border:`1.5px solid ${color}33`,overflow:"hidden",marginBottom:16}}>
+      <div style={{height:4,background:color}}/>
+      <div style={{padding:"16px"}}>
+        <div style={{fontSize:15,fontWeight:700,color:"#111827",marginBottom:14}}>{title}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
+function CalcInput({label,value,onChange,placeholder,unit}){
+  return(
+    <div style={{marginBottom:12}}>
+      <label style={{display:"block",fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:5}}>{label}{unit&&<span style={{fontWeight:400,textTransform:"none",marginLeft:4}}>({unit})</span>}</label>
+      <input type="number" inputMode="decimal" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder||"0"} min="0" step="any"
+        style={{width:"100%",padding:"12px 14px",border:"2px solid #e5e7eb",borderRadius:10,fontSize:16,fontWeight:600,color:"#111827",background:"#f9fafb",fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+    </div>
+  );
+}
+function CalcResult({label,value,unit,highlight}){
+  return(
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",background:highlight?"#f0fdf4":"#f9fafb",borderRadius:8,marginBottom:6,border:highlight?"1px solid #bbf7d0":"1px solid #f3f4f6"}}>
+      <span style={{fontSize:13,color:"#374151"}}>{label}</span>
+      <span style={{fontSize:15,fontWeight:700,color:highlight?"#166534":"#111827"}}>{value} <span style={{fontSize:12,fontWeight:400,color:"#6b7280"}}>{unit}</span></span>
+    </div>
+  );
+}
+
+function ShortstopCalc(){
+  const [dbh,setDbh]=useState("");
+  const [volPerInch,setVolPerInch]=useState("");
+  const d=parseFloat(dbh)||0, v=parseFloat(volPerInch)||0;
+  const shortstop = d>0 ? (d*d)/12 : null;
+  const water = (d>0&&v>0) ? (d*v) - shortstop : null;
+  const total = (shortstop!==null&&water!==null) ? shortstop+water : null;
+  const fmtML = n => n!=null ? n.toFixed(2) : "—";
+  return(
+    <CalcCard title="💉 Shortstop 2SC — Soil Drench" color="#2563eb">
+      <div style={{background:"#eff6ff",border:"1px solid #dbeafe",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#1e40af"}}>
+        Volume per inch varies by tree species — check the Shortstop label for the correct value.
+      </div>
+      <CalcInput label="DBH" value={dbh} onChange={setDbh} placeholder="e.g. 12" unit="inches"/>
+      <CalcInput label="Volume per inch (from label)" value={volPerInch} onChange={setVolPerInch} placeholder="e.g. 20" unit="mL/inch"/>
+      {total!==null&&(
+        <div style={{marginTop:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:8}}>Results</div>
+          <CalcResult label="mL of Shortstop" value={fmtML(shortstop)} unit="mL" highlight/>
+          <CalcResult label="mL of Water" value={fmtML(water)} unit="mL"/>
+          <CalcResult label="Total Solution" value={fmtML(total)} unit="mL"/>
+        </div>
+      )}
+    </CalcCard>
+  );
+}
+
+function PhosphoJetCalc(){
+  const [dbh,setDbh]=useState("");
+  const d=parseFloat(dbh)||0;
+  const sites = d>0 ? Math.round(d/2) : null;
+  const total = sites!=null ? sites*20 : null;
+  const phospho = total!=null ? total/2.85 : null;
+  const water = (total!=null&&phospho!=null) ? total-phospho : null;
+  const volPerSite = (total!=null&&sites!=null&&sites>0) ? total/sites : null;
+  const fmtML = n => n!=null ? n.toFixed(2) : "—";
+  return(
+    <CalcCard title="💉 PhosphoJet — Trunk Injection" color="#7e22ce">
+      <CalcInput label="DBH" value={dbh} onChange={setDbh} placeholder="e.g. 12" unit="inches"/>
+      {sites!=null&&(
+        <div style={{marginTop:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:8}}>Results</div>
+          <CalcResult label="Number of Injection Sites" value={sites} unit="sites"/>
+          <CalcResult label="Total Solution Volume" value={fmtML(total)} unit="mL"/>
+          <CalcResult label="PhosphoJet" value={fmtML(phospho)} unit="mL" highlight/>
+          <CalcResult label="Water" value={fmtML(water)} unit="mL"/>
+          <CalcResult label="Volume per Injection Site" value={fmtML(volPerSite)} unit="mL/site" highlight/>
+          <div style={{background:"#fdf4ff",border:"1px solid #e9d5ff",borderRadius:8,padding:"8px 12px",marginTop:8,fontSize:12,color:"#7e22ce"}}>
+            Mix ratio: 1 part PhosphoJet to 2 parts water
+          </div>
+        </div>
+      )}
+    </CalcCard>
+  );
+}
+
+function MnJetCalc(){
+  const [dbh,setDbh]=useState("");
+  const [rate,setRate]=useState("low");
+  const d=parseFloat(dbh)||0;
+  const circ = d>0 ? d*3 : null;
+  const sites = circ!=null ? Math.round(circ*0.1667) : null;
+  const totalVol = (d>0&&sites!=null) ? d*(rate==="low"?5:12) : null;
+  const volPerSite = (totalVol!=null&&sites!=null&&sites>0) ? totalVol/sites : null;
+  const fmtML = n => n!=null ? n.toFixed(2) : "—";
+  return(
+    <CalcCard title="💉 MnJet — Trunk Injection" color="#0891b2">
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        {[["low","🌱 Low Rate (Spring/Summer)"],["high","🍂 High Rate (Fall)"]].map(([val,lbl])=>(
+          <button key={val} onClick={()=>setRate(val)} style={{flex:1,padding:"9px 6px",borderRadius:8,border:`2px solid ${rate===val?"#0891b2":"#e5e7eb"}`,background:rate===val?"#f0f9ff":"#f9fafb",color:rate===val?"#0e7490":"#6b7280",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:"pointer"}}>{lbl}</button>
+        ))}
+      </div>
+      <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"7px 12px",marginBottom:12,fontSize:12,color:"#0e7490"}}>
+        Rate: <strong>{rate==="low"?"5 mL per inch DBH":"12 mL per inch DBH"}</strong>
+      </div>
+      <CalcInput label="DBH" value={dbh} onChange={setDbh} placeholder="e.g. 12" unit="inches"/>
+      {circ!=null&&(
+        <div style={{marginTop:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:8}}>Results</div>
+          <CalcResult label="Circumference" value={circ.toFixed(1)} unit="inches"/>
+          <CalcResult label="Number of Injection Sites" value={sites} unit="sites"/>
+          <CalcResult label="Total MnJet Volume" value={fmtML(totalVol)} unit="mL" highlight/>
+          <CalcResult label="Volume per Injection Site" value={fmtML(volPerSite)} unit="mL/site" highlight/>
+        </div>
+      )}
+    </CalcCard>
+  );
+}
+
+function CalculatorsScreen({onBack}){
+  return(
+    <div style={{minHeight:"100vh",background:"#f0f4f0"}}>
+      <div style={{background:"linear-gradient(135deg,#1a2e1a,#2d4a2d)",padding:"18px 16px",position:"sticky",top:0,zIndex:10}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",maxWidth:500,margin:"0 auto"}}>
+          <button onClick={onBack} style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:8,padding:"7px 12px",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer",minWidth:60}}>← Back</button>
+          <div style={{fontSize:17,fontWeight:700,color:"#fff",fontFamily:"'Playfair Display',serif"}}>Mix Rate Calculators</div>
+          <div style={{minWidth:60}}/>
+        </div>
+      </div>
+      <div style={{padding:"16px",maxWidth:500,margin:"0 auto",paddingBottom:40}}>
+        <p style={{fontSize:13,color:"#6b7280",marginBottom:16,textAlign:"center"}}>Enter tree measurements to calculate product volumes for trunk injections and soil drenches.</p>
+        <ShortstopCalc/>
+        <PhosphoJetCalc/>
+        <MnJetCalc/>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // TECH VIEW
 // ════════════════════════════════════════════════════════════════════════════
 function TechView({products,blends,transactions,techs,techName,setTechName,onSave,onManagerRequest}){
@@ -273,6 +414,7 @@ function TechView({products,blends,transactions,techs,techName,setTechName,onSav
       <div style={{padding:"28px 20px 0",display:"flex",gap:10,maxWidth:420,margin:"28px auto 0",width:"100%"}}>
         <button onClick={()=>setScreen("inventory")} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 0",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>📦 Stock</button>
         <button onClick={()=>setScreen("cheatsheet")} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 0",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>📋 Mix Rates</button>
+        <button onClick={()=>setScreen("calculators")} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 0",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>🧮 Calculators</button>
         <button onClick={onManagerRequest} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 0",color:"rgba(255,255,255,0.3)",fontSize:12,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>⚙ Manager</button>
       </div>
     </div>
@@ -377,6 +519,9 @@ function TechView({products,blends,transactions,techs,techName,setTechName,onSav
       </div>
     );
   }
+
+  if(screen==="calculators") return <CalculatorsScreen onBack={()=>setScreen(techName?"log":"landing")}/>;
+
   return null;
 }
 
