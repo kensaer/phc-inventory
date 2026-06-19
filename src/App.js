@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { supabase } from './supabase';
+import Login from './Login';
+import { getSession, getProfile, onAuthChange, signOut } from './auth';
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
 const SEED_PRODUCTS = [
@@ -306,7 +308,7 @@ function CalculatorsScreen({onBack}){
 // ════════════════════════════════════════════════════════════════════════════
 // TECH VIEW
 // ════════════════════════════════════════════════════════════════════════════
-function TechView({products,blends,transactions,techs,techName,setTechName,onSave,onManagerRequest}){
+function TechView({products,blends,transactions,techs,techName,setTechName,onSave,onManagerRequest,session,profile,onShowLogin,onSignOut}){
   const [screen,setScreen]=useState(techName?"log":"landing");
   const [logDate,setLogDate]=useState(today());
   const [entries,setEntries]=useState([{type:"product",id:"",amount:""}]);
@@ -416,6 +418,17 @@ function TechView({products,blends,transactions,techs,techName,setTechName,onSav
         <button onClick={()=>setScreen("cheatsheet")} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 0",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>📋 Mix Rates</button>
         <button onClick={()=>setScreen("calculators")} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 0",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>🧮 Calculators</button>
         <button onClick={onManagerRequest} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 0",color:"rgba(255,255,255,0.3)",fontSize:12,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>⚙ Manager</button>
+      </div>
+      <div style={{padding:"24px 20px 16px",maxWidth:420,margin:"0 auto",width:"100%",textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.35)",fontWeight:600,letterSpacing:"0.04em"}}>
+        {session ? (
+          <>
+            Signed in as <span style={{color:"rgba(255,255,255,0.6)"}}>{profile?.full_name || session.user.email}</span>
+            <span style={{margin:"0 6px",color:"rgba(255,255,255,0.2)"}}>·</span>
+            <button onClick={onSignOut} style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",fontFamily:"inherit",fontSize:11,fontWeight:600,letterSpacing:"0.04em",cursor:"pointer",padding:0,textDecoration:"underline"}}>Sign out</button>
+          </>
+        ) : (
+          <button onClick={onShowLogin} style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",fontFamily:"inherit",fontSize:11,fontWeight:600,letterSpacing:"0.04em",cursor:"pointer",padding:0,textDecoration:"underline"}}>Sign In</button>
+        )}
       </div>
     </div>
   );
@@ -1061,6 +1074,34 @@ export default function App() {
   const [showPasscode, setShowPasscode] = useState(false);
   const [techName, setTechName]         = useState("");
   const [error, setError]               = useState(null);
+  const [session, setSession]           = useState(null);
+  const [profile, setProfile]           = useState(null);
+  const [showLogin, setShowLogin]       = useState(false);
+
+  // ── Auth (Phase 1A: opt-in, no enforcement yet) ──
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const s = await getSession();
+      if (!mounted) return;
+      setSession(s);
+      if (s) {
+        const p = await getProfile();
+        if (mounted) setProfile(p);
+      }
+    })();
+    const unsubscribe = onAuthChange(async (newSession) => {
+      setSession(newSession);
+      if (newSession) {
+        const p = await getProfile();
+        setProfile(p);
+        setShowLogin(false);
+      } else {
+        setProfile(null);
+      }
+    });
+    return () => { mounted = false; unsubscribe(); };
+  }, []);
 
   // ── Initial load ──
   useEffect(() => {
@@ -1207,6 +1248,7 @@ export default function App() {
   return (
     <>
       {showPasscode && <PasscodeModal onSuccess={() => { setShowPasscode(false); setMode("manager"); }} onCancel={() => setShowPasscode(false)} />}
+      {showLogin && <Login onClose={() => setShowLogin(false)} />}
       {mode === "tech" && (
         <TechView
           products={products} blends={blends} transactions={transactions}
@@ -1214,6 +1256,10 @@ export default function App() {
           techName={techName} setTechName={setTechName}
           onSave={saveProductsAndTxns}
           onManagerRequest={() => setShowPasscode(true)}
+          session={session}
+          profile={profile}
+          onShowLogin={() => setShowLogin(true)}
+          onSignOut={signOut}
         />
       )}
       {mode === "manager" && (
