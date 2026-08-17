@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, Fragment } from 'react';
 import { supabase } from './supabase';
 import Login from './Login';
 import { getSession, getProfile, onAuthChange, signOut } from './auth';
+import { listProfiles, inviteUser, updateUserRole, removeUser } from './adminUsers';
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
 const SEED_PRODUCTS = [
@@ -603,9 +604,179 @@ function BlendCard({b, products, onEdit, onDelete}){
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// USERS VIEW (admin only)
+// ════════════════════════════════════════════════════════════════════════════
+const ROLE_LABELS = {
+  admin: "Admin",
+  manager: "Manager",
+  phc_team_lead: "PHC Team Lead",
+  phc_tech: "PHC Tech",
+  gtc_team_lead: "GTC Team Lead",
+  gtc_tech: "GTC Tech",
+};
+const ROLE_KEYS = Object.keys(ROLE_LABELS);
+
+function UsersView({currentProfile, showToast, iS, Btn}){
+  const [users, setUsers] = useState(null);
+  const [loadErr, setLoadErr] = useState(null);
+  const [inviting, setInviting] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteForm, setInviteForm] = useState({email:"", full_name:"", role:"phc_tech"});
+  const [pendingRow, setPendingRow] = useState(null); // user_id being modified
+  const [confirmRemove, setConfirmRemove] = useState(null); // user object
+
+  const reload = async () => {
+    try {
+      const rows = await listProfiles();
+      setUsers(rows);
+      setLoadErr(null);
+    } catch (e) {
+      setLoadErr(e.message || String(e));
+    }
+  };
+  useEffect(() => { reload(); }, []);
+
+  const submitInvite = async () => {
+    const email = inviteForm.email.trim().toLowerCase();
+    const full_name = inviteForm.full_name.trim();
+    if (!email || !full_name) return showToast("Email and name are required.", "error");
+    setInviting(true);
+    try {
+      await inviteUser({email, full_name, role: inviteForm.role});
+      showToast(`Invite sent to ${email}`);
+      setShowInvite(false);
+      setInviteForm({email:"", full_name:"", role:"phc_tech"});
+      reload();
+    } catch (e) {
+      showToast(e.message || "Invite failed", "error");
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const changeRole = async (u, newRole) => {
+    if (newRole === u.role) return;
+    setPendingRow(u.id);
+    try {
+      await updateUserRole({user_id: u.id, role: newRole});
+      showToast(`${u.full_name} → ${ROLE_LABELS[newRole]}`);
+      reload();
+    } catch (e) {
+      showToast(e.message || "Update failed", "error");
+    } finally {
+      setPendingRow(null);
+    }
+  };
+
+  const doRemove = async (u) => {
+    setPendingRow(u.id);
+    try {
+      await removeUser({user_id: u.id});
+      showToast(`${u.full_name} removed`);
+      setConfirmRemove(null);
+      reload();
+    } catch (e) {
+      showToast(e.message || "Remove failed", "error");
+    } finally {
+      setPendingRow(null);
+    }
+  };
+
+  return (
+    <div style={{animation:"fadeUp 0.3s ease"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
+        <div>
+          <h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Users</h1>
+          <p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>Invite teammates and control who has access to the app.</p>
+        </div>
+        <Btn onClick={()=>setShowInvite(true)}>+ Invite User</Btn>
+      </div>
+
+      {loadErr && <div style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#991b1b",padding:"10px 14px",borderRadius:10,marginBottom:14,fontSize:13}}>Couldn't load users: {loadErr}</div>}
+
+      <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",overflow:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead>
+            <tr style={{background:"#f9fafb"}}>
+              {["Name","Email","Role","Added",""].map(h=><th key={h} style={{padding:"10px 13px",textAlign:"left",fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",borderBottom:"1px solid #e5e7eb",whiteSpace:"nowrap"}}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {users === null && <tr><td colSpan={5} style={{padding:24,textAlign:"center",color:"#9ca3af"}}>Loading users…</td></tr>}
+            {users && users.length === 0 && <tr><td colSpan={5} style={{padding:24,textAlign:"center",color:"#9ca3af"}}>No users yet.</td></tr>}
+            {users && users.map((u)=>{
+              const isSelf = u.id === currentProfile.id;
+              const busy = pendingRow === u.id;
+              return (
+                <tr key={u.id} style={{borderBottom:"1px solid #f3f4f6"}}>
+                  <td style={{padding:"10px 13px",fontWeight:600,color:"#111827"}}>{u.full_name}{isSelf && <span style={{marginLeft:6,fontSize:11,color:"#9ca3af",fontWeight:400}}>(you)</span>}</td>
+                  <td style={{padding:"10px 13px",color:"#6b7280"}}>{u.email}</td>
+                  <td style={{padding:"10px 13px"}}>
+                    <select value={u.role} disabled={isSelf || busy} onChange={e=>changeRole(u, e.target.value)} style={{...iS, padding:"6px 10px", fontSize:13, width:"auto", minWidth:150, opacity:isSelf?0.55:1}}>
+                      {ROLE_KEYS.map(r=><option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                    </select>
+                  </td>
+                  <td style={{padding:"10px 13px",color:"#6b7280",fontSize:12,whiteSpace:"nowrap"}}>{u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}</td>
+                  <td style={{padding:"10px 10px",whiteSpace:"nowrap",textAlign:"right"}}>
+                    {!isSelf && (
+                      <button onClick={()=>setConfirmRemove(u)} disabled={busy} style={{background:"#fee2e2",border:"none",borderRadius:5,padding:"5px 10px",cursor:busy?"default":"pointer",fontSize:12,color:"#dc2626",fontFamily:"inherit",fontWeight:600,opacity:busy?0.5:1}}>Remove</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {showInvite && (
+        <div style={{position:"fixed",inset:0,background:"rgba(10,20,10,0.6)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:460,padding:"22px 26px"}}>
+            <h3 style={{margin:"0 0 14px",fontSize:19,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Invite User</h3>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:5}}>Email</div>
+              <input type="email" value={inviteForm.email} onChange={e=>setInviteForm(f=>({...f,email:e.target.value}))} placeholder="teammate@example.com" style={iS} autoFocus/>
+            </div>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:5}}>Full Name</div>
+              <input type="text" value={inviteForm.full_name} onChange={e=>setInviteForm(f=>({...f,full_name:e.target.value}))} placeholder="Jane Smith" style={iS}/>
+            </div>
+            <div style={{marginBottom:18}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:5}}>Role</div>
+              <select value={inviteForm.role} onChange={e=>setInviteForm(f=>({...f,role:e.target.value}))} style={iS}>
+                {ROLE_KEYS.map(r=><option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              </select>
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <Btn onClick={submitInvite} disabled={inviting} style={{flex:1}}>{inviting?"Sending…":"Send Invite"}</Btn>
+              <Btn onClick={()=>setShowInvite(false)} color="ghost">Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmRemove && (
+        <div style={{position:"fixed",inset:0,background:"rgba(10,20,10,0.6)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:420,padding:"22px 26px"}}>
+            <h3 style={{margin:"0 0 8px",fontSize:19,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Remove User</h3>
+            <p style={{margin:"0 0 16px",color:"#6b7280",fontSize:14,lineHeight:1.5}}>
+              Remove <strong style={{color:"#111827"}}>{confirmRemove.full_name}</strong> ({confirmRemove.email})? They'll lose access immediately and their sign-in link will stop working.
+            </p>
+            <div style={{display:"flex",gap:10}}>
+              <Btn onClick={()=>doRemove(confirmRemove)} color="red" disabled={pendingRow===confirmRemove.id} style={{flex:1}}>{pendingRow===confirmRemove.id?"Removing…":"Yes, Remove"}</Btn>
+              <Btn onClick={()=>setConfirmRemove(null)} color="ghost">Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // MANAGER VIEW
 // ════════════════════════════════════════════════════════════════════════════
-function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onExit,onSaveProducts,onSaveTechs}){
+function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onExit,onSaveProducts,onSaveTechs,profile}){
   const [view,setView]=useState("dashboard");
   const [modal,setModal]=useState(null);
   const [editTarget,setEditTarget]=useState(null);
@@ -754,7 +925,16 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
     showToast("Exported inventory to CSV");
   };
 
-  const navItems=[{k:"dashboard",l:"Dashboard",i:"◈"},{k:"inventory",l:"Inventory",i:"⊞"},{k:"blends",l:"Blends",i:"🧬"},{k:"history",l:"History",i:"↺"},{k:"team",l:"Team",i:"👥"},{k:"settings",l:"Settings",i:"⚙"}];
+  const isAdmin = profile?.role === "admin";
+  const navItems=[
+    {k:"dashboard",l:"Dashboard",i:"◈"},
+    {k:"inventory",l:"Inventory",i:"⊞"},
+    {k:"blends",l:"Blends",i:"🧬"},
+    {k:"history",l:"History",i:"↺"},
+    {k:"team",l:"Team",i:"👥"},
+    ...(isAdmin ? [{k:"users",l:"Users",i:"🔐"}] : []),
+    {k:"settings",l:"Settings",i:"⚙"},
+  ];
 
   return(
     <div style={{minHeight:"100vh",background:"#eef2ee",display:"flex"}}>
@@ -907,6 +1087,10 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
 
         {view==="team"&&(
           <TeamView techs={techs} onSaveTechs={onSaveTechs} showToast={showToast} iS={iS}/>
+        )}
+
+        {view==="users"&&isAdmin&&(
+          <UsersView currentProfile={profile} showToast={showToast} iS={iS} Btn={Btn}/>
         )}
 
         {view==="settings"&&(
@@ -1274,6 +1458,7 @@ export default function App() {
           onSaveProducts={saveProducts}
           onSaveTechs={saveTechs}
           onExit={() => setMode("tech")}
+          profile={profile}
         />
       )}
     </>
