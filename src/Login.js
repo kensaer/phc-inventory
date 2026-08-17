@@ -55,12 +55,14 @@ export default function Login({ onClose }) {
             </button>
           </form>
         )}
-        <button
-          onClick={onClose}
-          style={{width:"100%",background:"transparent",border:"none",color:"#6b7280",fontFamily:"inherit",fontSize:13,fontWeight:600,padding:"8px",cursor:"pointer"}}
-        >
-          {sent ? 'Close' : 'Cancel'}
-        </button>
+        {onClose && (
+          <button
+            onClick={onClose}
+            style={{width:"100%",background:"transparent",border:"none",color:"#6b7280",fontFamily:"inherit",fontSize:13,fontWeight:600,padding:"8px",cursor:"pointer"}}
+          >
+            {sent ? 'Close' : 'Cancel'}
+          </button>
+        )}
       </div>
     </div>
   );

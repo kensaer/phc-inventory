@@ -308,7 +308,7 @@ function CalculatorsScreen({onBack}){
 // ════════════════════════════════════════════════════════════════════════════
 // TECH VIEW
 // ════════════════════════════════════════════════════════════════════════════
-function TechView({products,blends,transactions,techs,techName,setTechName,onSave,onManagerRequest,session,profile,onShowLogin,onSignOut}){
+function TechView({products,blends,transactions,techs,techName,setTechName,onSave,onManagerRequest,session,profile,onSignOut}){
   const [screen,setScreen]=useState(techName?"log":"landing");
   const [logDate,setLogDate]=useState(today());
   const [entries,setEntries]=useState([{type:"product",id:"",amount:""}]);
@@ -400,35 +400,22 @@ function TechView({products,blends,transactions,techs,techName,setTechName,onSav
       </div>
       {blends.length>0&&<div style={{padding:"0 20px 20px",maxWidth:420,margin:"0 auto",width:"100%",display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>{blends.map(b=><span key={b.id} style={{background:b.color+"22",border:`1px solid ${b.color}44`,color:b.color,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:99}}>🧬 {b.name}</span>)}</div>}
       <div style={{padding:"0 20px",animation:"fadeUp 0.4s ease"}}>
-        <p style={{color:"#8faf8f",fontSize:13,fontWeight:600,textAlign:"center",marginBottom:14,letterSpacing:"0.05em",textTransform:"uppercase"}}>Who's logging?</p>
-        <div style={{display:"flex",flexDirection:"column",gap:10,maxWidth:420,margin:"0 auto"}}>
-          {(techs||[]).map(name=>(
-            <button key={name} className="tech-btn" onClick={()=>selectTech(name)} style={{background:"rgba(255,255,255,0.07)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>
-              <div style={{display:"flex",alignItems:"center",gap:14}}>
-                <div style={{width:38,height:38,borderRadius:99,background:"linear-gradient(135deg,#2d6a2d,#4a9e4a)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff"}}>{name[0]}</div>
-                <span style={{fontSize:17,fontWeight:600,color:"#fff"}}>{name}</span>
-              </div>
-              <span style={{color:"#4a9e4a",fontSize:20}}>→</span>
-            </button>
-          ))}
+        <div style={{maxWidth:420,margin:"0 auto",background:"rgba(255,255,255,0.07)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:14,padding:"18px 20px",textAlign:"center"}}>
+          <div style={{color:"#8faf8f",fontSize:11,fontWeight:700,letterSpacing:"0.15em",textTransform:"uppercase",marginBottom:6}}>Signed in as</div>
+          <div style={{color:"#fff",fontSize:18,fontWeight:700,marginBottom:16}}>{profile?.full_name || session?.user?.email}</div>
+          <button onClick={()=>{setEntries([{type:"product",id:"",amount:""}]);setLogDate(today());setScreen("log");}} style={{background:"linear-gradient(135deg,#2d6a2d,#4a9e4a)",border:"none",borderRadius:12,padding:"14px 24px",color:"#fff",fontSize:15,fontWeight:700,fontFamily:"inherit",cursor:"pointer",width:"100%",boxShadow:"0 4px 20px rgba(74,158,74,0.35)"}}>Start Logging →</button>
         </div>
       </div>
       <div style={{padding:"28px 20px 0",display:"flex",gap:10,maxWidth:420,margin:"28px auto 0",width:"100%"}}>
         <button onClick={()=>setScreen("inventory")} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 0",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>📦 Stock</button>
         <button onClick={()=>setScreen("cheatsheet")} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 0",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>📋 Mix Rates</button>
         <button onClick={()=>setScreen("calculators")} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 0",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>🧮 Calculators</button>
-        <button onClick={onManagerRequest} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 0",color:"rgba(255,255,255,0.3)",fontSize:12,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>⚙ Manager</button>
-      </div>
-      <div style={{padding:"24px 20px 16px",maxWidth:420,margin:"0 auto",width:"100%",textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.35)",fontWeight:600,letterSpacing:"0.04em"}}>
-        {session ? (
-          <>
-            Signed in as <span style={{color:"rgba(255,255,255,0.6)"}}>{profile?.full_name || session.user.email}</span>
-            <span style={{margin:"0 6px",color:"rgba(255,255,255,0.2)"}}>·</span>
-            <button onClick={onSignOut} style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",fontFamily:"inherit",fontSize:11,fontWeight:600,letterSpacing:"0.04em",cursor:"pointer",padding:0,textDecoration:"underline"}}>Sign out</button>
-          </>
-        ) : (
-          <button onClick={onShowLogin} style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",fontFamily:"inherit",fontSize:11,fontWeight:600,letterSpacing:"0.04em",cursor:"pointer",padding:0,textDecoration:"underline"}}>Sign In</button>
+        {onManagerRequest && (
+          <button onClick={onManagerRequest} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 0",color:"rgba(255,255,255,0.3)",fontSize:12,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>⚙ Manager</button>
         )}
+      </div>
+      <div style={{padding:"24px 20px 16px",maxWidth:420,margin:"0 auto",width:"100%",textAlign:"center"}}>
+        <button onClick={onSignOut} style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",fontFamily:"inherit",fontSize:11,fontWeight:600,letterSpacing:"0.04em",cursor:"pointer",padding:0,textDecoration:"underline"}}>Sign out</button>
       </div>
     </div>
   );
@@ -1071,14 +1058,13 @@ export default function App() {
   const [transactions, setTransactions] = useState(null);
   const [techs, setTechs]               = useState(null);
   const [mode, setMode]                 = useState("tech");
-  const [showPasscode, setShowPasscode] = useState(false);
   const [techName, setTechName]         = useState("");
   const [error, setError]               = useState(null);
   const [session, setSession]           = useState(null);
   const [profile, setProfile]           = useState(null);
-  const [showLogin, setShowLogin]       = useState(false);
+  const [profileChecked, setProfileChecked] = useState(false);
 
-  // ── Auth (Phase 1A: opt-in, no enforcement yet) ──
+  // ── Auth (Phase 1B: login required, role-gated) ──
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -1087,21 +1073,30 @@ export default function App() {
       setSession(s);
       if (s) {
         const p = await getProfile();
-        if (mounted) setProfile(p);
+        if (mounted) { setProfile(p); setProfileChecked(true); }
+      } else {
+        setProfileChecked(true);
       }
     })();
     const unsubscribe = onAuthChange(async (newSession) => {
       setSession(newSession);
       if (newSession) {
+        setProfileChecked(false);
         const p = await getProfile();
         setProfile(p);
-        setShowLogin(false);
+        setProfileChecked(true);
       } else {
         setProfile(null);
+        setProfileChecked(true);
       }
     });
     return () => { mounted = false; unsubscribe(); };
   }, []);
+
+  // Sync tech name with signed-in profile so log entries record the real user
+  useEffect(() => {
+    if (profile?.full_name) setTechName(profile.full_name);
+  }, [profile]);
 
   // ── Initial load ──
   useEffect(() => {
@@ -1245,24 +1240,32 @@ export default function App() {
 
   if (!products || !blends || !transactions || !techs) return <Spinner />;
 
+  // ── Auth gates ──
+  if (!session) return <Login />;
+  if (!profileChecked) return <Spinner />;
+  if (!profile) return <NoAccessScreen email={session.user.email} onSignOut={signOut} />;
+
+  const role = profile.role;
+  const canAccessManager = role === "admin" || role === "manager";
+  const isGTC = role === "gtc_team_lead" || role === "gtc_tech";
+
+  if (isGTC) return <GTCPlaceholder profile={profile} onSignOut={signOut} />;
+
   return (
     <>
-      {showPasscode && <PasscodeModal onSuccess={() => { setShowPasscode(false); setMode("manager"); }} onCancel={() => setShowPasscode(false)} />}
-      {showLogin && <Login onClose={() => setShowLogin(false)} />}
       {mode === "tech" && (
         <TechView
           products={products} blends={blends} transactions={transactions}
           techs={techs}
           techName={techName} setTechName={setTechName}
           onSave={saveProductsAndTxns}
-          onManagerRequest={() => setShowPasscode(true)}
+          onManagerRequest={canAccessManager ? () => setMode("manager") : null}
           session={session}
           profile={profile}
-          onShowLogin={() => setShowLogin(true)}
           onSignOut={signOut}
         />
       )}
-      {mode === "manager" && (
+      {mode === "manager" && canAccessManager && (
         <ManagerView
           products={products} blends={blends} transactions={transactions}
           techs={techs}
@@ -1274,5 +1277,35 @@ export default function App() {
         />
       )}
     </>
+  );
+}
+
+function NoAccessScreen({ email, onSignOut }) {
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#1a2e1a,#0d1a0d)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{maxWidth:420,textAlign:"center",color:"#fff"}}>
+        <div style={{fontSize:44,marginBottom:14}}>🔒</div>
+        <h1 style={{margin:"0 0 10px",fontSize:24,fontFamily:"'Playfair Display',serif"}}>Access Not Set Up</h1>
+        <p style={{color:"#8faf8f",fontSize:14,lineHeight:1.5,marginBottom:22}}>
+          You're signed in as <strong style={{color:"#fff"}}>{email}</strong>, but this email doesn't have a profile in the app yet. Contact your administrator to request access.
+        </p>
+        <button onClick={onSignOut} style={{background:"rgba(255,255,255,0.1)",border:"1.5px solid rgba(255,255,255,0.2)",borderRadius:10,padding:"11px 22px",color:"#fff",fontFamily:"inherit",fontSize:14,fontWeight:600,cursor:"pointer"}}>Sign Out</button>
+      </div>
+    </div>
+  );
+}
+
+function GTCPlaceholder({ profile, onSignOut }) {
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#1a2e1a,#0d1a0d)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{maxWidth:420,textAlign:"center",color:"#fff"}}>
+        <div style={{fontSize:44,marginBottom:14}}>🌳</div>
+        <h1 style={{margin:"0 0 10px",fontSize:24,fontFamily:"'Playfair Display',serif"}}>GTC Features Coming Soon</h1>
+        <p style={{color:"#8faf8f",fontSize:14,lineHeight:1.5,marginBottom:22}}>
+          Welcome, <strong style={{color:"#fff"}}>{profile.full_name}</strong>. GTC inventory and request features are still being built and will appear here once they're ready.
+        </p>
+        <button onClick={onSignOut} style={{background:"rgba(255,255,255,0.1)",border:"1.5px solid rgba(255,255,255,0.2)",borderRadius:10,padding:"11px 22px",color:"#fff",fontFamily:"inherit",fontSize:14,fontWeight:600,cursor:"pointer"}}>Sign Out</button>
+      </div>
+    </div>
   );
 }
