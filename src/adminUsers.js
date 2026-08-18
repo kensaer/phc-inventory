@@ -8,7 +8,19 @@ async function callAdmin(body) {
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body,
   });
-  if (error) throw error;
+  if (error) {
+    // FunctionsHttpError exposes the raw Response on error.context; the actual
+    // JSON message from our function lives in its body. supabase-js's default
+    // error.message is just "non-2xx status", which isn't useful on its own.
+    let msg = error.message || 'Request failed';
+    try {
+      if (error.context && typeof error.context.json === 'function') {
+        const parsed = await error.context.json();
+        if (parsed?.error) msg = parsed.error;
+      }
+    } catch { /* keep default msg */ }
+    throw new Error(msg);
+  }
   if (data?.error) throw new Error(data.error);
   return data;
 }
