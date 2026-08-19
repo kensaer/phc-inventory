@@ -35,14 +35,16 @@ export function inviteUser({ email, full_name, role }) {
   });
 }
 
-// Generate a fresh sign-in link for an existing user (e.g. someone got
-// logged out on a new device). Returns { ok, action_link } — the admin
-// copies the link and shares it manually.
-export function resendSignInLink({ email }) {
+// Generate a fresh sign-in link for an existing user. Returns
+// { ok, action_link } — admin copies the link and shares it manually.
+// redirectTo is optional and defaults to the current origin; set it
+// explicitly to bounce the recipient to a different origin (e.g. a
+// Vercel preview URL).
+export function resendSignInLink({ email, redirectTo }) {
   return callAdmin({
     action: 'resend_link',
     email,
-    redirectTo: window.location.origin,
+    redirectTo: redirectTo || window.location.origin,
   });
 }
 

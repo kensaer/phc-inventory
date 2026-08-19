@@ -681,6 +681,7 @@ function UsersView({currentProfile, showToast, iS, Btn}){
   const [pendingRow, setPendingRow] = useState(null); // user_id being modified
   const [confirmRemove, setConfirmRemove] = useState(null); // user object
   const [linkModal, setLinkModal] = useState(null); // { title, subtitle, link, email }
+  const [linkPrompt, setLinkPrompt] = useState(null); // { user, redirectTo }
   const [copied, setCopied] = useState(false);
 
   const reload = async () => {
@@ -717,13 +718,16 @@ function UsersView({currentProfile, showToast, iS, Btn}){
     }
   };
 
-  const getSignInLink = async (u) => {
+  const getSignInLink = async (u, redirectTo) => {
     setPendingRow(u.id);
     try {
-      const res = await resendSignInLink({email: u.email});
+      const res = await resendSignInLink({email: u.email, redirectTo});
+      const isSelf = u.id === currentProfile.id;
       setLinkModal({
-        title: `Sign-in link for ${u.full_name}`,
-        subtitle: `Share this link with ${u.email}. Signs them in without needing an email.`,
+        title: isSelf ? `Sign-in link for you` : `Sign-in link for ${u.full_name}`,
+        subtitle: isSelf
+          ? `Paste this link into the browser at ${redirectTo || window.location.origin} to sign in there. One-use.`
+          : `Share this link with ${u.email}. Signs them in without needing an email.`,
         link: res.action_link,
         email: u.email,
       });
@@ -732,6 +736,10 @@ function UsersView({currentProfile, showToast, iS, Btn}){
     } finally {
       setPendingRow(null);
     }
+  };
+
+  const openLinkPrompt = (u) => {
+    setLinkPrompt({ user: u, redirectTo: window.location.origin });
   };
 
   const copyLink = async () => {
@@ -811,11 +819,9 @@ function UsersView({currentProfile, showToast, iS, Btn}){
                   </td>
                   <td style={{padding:"10px 13px",color:"#6b7280",fontSize:12,whiteSpace:"nowrap"}}>{u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}</td>
                   <td style={{padding:"10px 10px",whiteSpace:"nowrap",textAlign:"right"}}>
+                    <button onClick={()=>openLinkPrompt(u)} disabled={busy} style={{background:"#eef2ff",border:"none",borderRadius:5,padding:"5px 10px",cursor:busy?"default":"pointer",fontSize:12,color:"#4338ca",fontFamily:"inherit",fontWeight:600,marginRight:6,opacity:busy?0.5:1}}>Get link</button>
                     {!isSelf && (
-                      <>
-                        <button onClick={()=>getSignInLink(u)} disabled={busy} style={{background:"#eef2ff",border:"none",borderRadius:5,padding:"5px 10px",cursor:busy?"default":"pointer",fontSize:12,color:"#4338ca",fontFamily:"inherit",fontWeight:600,marginRight:6,opacity:busy?0.5:1}}>Get link</button>
-                        <button onClick={()=>setConfirmRemove(u)} disabled={busy} style={{background:"#fee2e2",border:"none",borderRadius:5,padding:"5px 10px",cursor:busy?"default":"pointer",fontSize:12,color:"#dc2626",fontFamily:"inherit",fontWeight:600,opacity:busy?0.5:1}}>Remove</button>
-                      </>
+                      <button onClick={()=>setConfirmRemove(u)} disabled={busy} style={{background:"#fee2e2",border:"none",borderRadius:5,padding:"5px 10px",cursor:busy?"default":"pointer",fontSize:12,color:"#dc2626",fontFamily:"inherit",fontWeight:600,opacity:busy?0.5:1}}>Remove</button>
                     )}
                   </td>
                 </tr>
@@ -861,6 +867,40 @@ function UsersView({currentProfile, showToast, iS, Btn}){
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={()=>doRemove(confirmRemove)} color="red" disabled={pendingRow===confirmRemove.id} style={{flex:1}}>{pendingRow===confirmRemove.id?"Removing…":"Yes, Remove"}</Btn>
               <Btn onClick={()=>setConfirmRemove(null)} color="ghost">Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {linkPrompt && (
+        <div style={{position:"fixed",inset:0,background:"rgba(10,20,10,0.6)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:460,padding:"22px 26px"}}>
+            <h3 style={{margin:"0 0 6px",fontSize:19,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Generate sign-in link</h3>
+            <p style={{margin:"0 0 16px",color:"#6b7280",fontSize:13,lineHeight:1.5}}>
+              For <strong style={{color:"#374151"}}>{linkPrompt.user.full_name}</strong> ({linkPrompt.user.email}). Set the URL the link should return to after sign-in — usually just the app, but you can point it at a Vercel preview URL to test a branch without an email round-trip.
+            </p>
+            <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:5}}>Redirect to</div>
+            <input
+              type="url"
+              value={linkPrompt.redirectTo}
+              onChange={e=>setLinkPrompt({...linkPrompt, redirectTo: e.target.value})}
+              placeholder="https://phc-inventory-n5ot.vercel.app"
+              style={{...iS, marginBottom:16, fontFamily:"monospace", fontSize:12}}
+              autoFocus
+            />
+            <div style={{display:"flex",gap:10}}>
+              <Btn
+                onClick={()=>{
+                  const target = linkPrompt.user;
+                  const rt = linkPrompt.redirectTo;
+                  setLinkPrompt(null);
+                  getSignInLink(target, rt);
+                }}
+                style={{flex:1}}
+              >
+                Generate
+              </Btn>
+              <Btn onClick={()=>setLinkPrompt(null)} color="ghost">Cancel</Btn>
             </div>
           </div>
         </div>
