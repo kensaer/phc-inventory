@@ -309,7 +309,7 @@ function CalculatorsScreen({onBack}){
 // ════════════════════════════════════════════════════════════════════════════
 // TECH VIEW
 // ════════════════════════════════════════════════════════════════════════════
-function TechView({products,blends,transactions,techs,techName,setTechName,onSave,onManagerRequest,session,profile,onSignOut}){
+function TechView({products,blends,transactions,techName,setTechName,onSave,onManagerRequest,session,profile,onSignOut}){
   const [screen,setScreen]=useState(techName?"log":"landing");
   const [logDate,setLogDate]=useState(today());
   const [entries,setEntries]=useState([{type:"product",id:"",amount:""}]);
@@ -524,47 +524,6 @@ function TechView({products,blends,transactions,techs,techName,setTechName,onSav
   if(screen==="calculators") return <CalculatorsScreen onBack={()=>setScreen(techName?"log":"landing")}/>;
 
   return null;
-}
-
-function TeamView({techs,onSaveTechs,showToast,iS}){
-  const [newName,setNewName]=useState("");
-  const add=()=>{
-    const n=newName.trim();
-    if(!n)return;
-    if((techs||[]).map(t=>t.toLowerCase()).includes(n.toLowerCase())){showToast("That name already exists.","error");return;}
-    onSaveTechs([...(techs||[]),n]);
-    setNewName("");
-    showToast(`${n} added to team`);
-  };
-  return(
-    <div style={{animation:"fadeUp 0.3s ease",maxWidth:500}}>
-      <div style={{marginBottom:20}}>
-        <h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Team</h1>
-        <p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>Manage the tech names that appear on the daily log screen</p>
-      </div>
-      <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",overflow:"hidden",marginBottom:16}}>
-        {(!techs||techs.length===0)
-          ? <div style={{padding:28,textAlign:"center",color:"#9ca3af",fontSize:14}}>No techs added yet.</div>
-          : techs.map((name,i)=>(
-            <div key={name} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",borderBottom:i<techs.length-1?"1px solid #f3f4f6":"none"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <div style={{width:34,height:34,borderRadius:99,background:"linear-gradient(135deg,#2d6a2d,#4a9e4a)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>{name[0]}</div>
-                <span style={{fontWeight:600,fontSize:15,color:"#111827"}}>{name}</span>
-              </div>
-              <button onClick={()=>onSaveTechs(techs.filter(t=>t!==name))} style={{background:"#fee2e2",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:12,color:"#dc2626",fontFamily:"inherit",fontWeight:600}}>Remove</button>
-            </div>
-          ))
-        }
-      </div>
-      <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",padding:"18px 20px"}}>
-        <div style={{fontWeight:700,fontSize:14,color:"#111827",marginBottom:12}}>Add Team Member</div>
-        <div style={{display:"flex",gap:10}}>
-          <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="First name" style={{...iS,flex:1}} autoComplete="off"/>
-          <Btn onClick={add}>Add</Btn>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function BlendCard({b, products, onEdit, onDelete}){
@@ -834,7 +793,7 @@ function UsersView({currentProfile, showToast, iS, Btn}){
 // ════════════════════════════════════════════════════════════════════════════
 // MANAGER VIEW
 // ════════════════════════════════════════════════════════════════════════════
-function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onExit,onSaveProducts,onSaveTechs,profile}){
+function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,onSaveProducts,profile}){
   const [view,setView]=useState("dashboard");
   const [modal,setModal]=useState(null);
   const [editTarget,setEditTarget]=useState(null);
@@ -989,7 +948,6 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
     {k:"inventory",l:"Inventory",i:"⊞"},
     {k:"blends",l:"Blends",i:"🧬"},
     {k:"history",l:"History",i:"↺"},
-    {k:"team",l:"Team",i:"👥"},
     ...(isAdmin ? [{k:"users",l:"Users",i:"🔐"}] : []),
     {k:"settings",l:"Settings",i:"⚙"},
   ];
@@ -1143,10 +1101,6 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
           </div>
         )}
 
-        {view==="team"&&(
-          <TeamView techs={techs} onSaveTechs={onSaveTechs} showToast={showToast} iS={iS}/>
-        )}
-
         {view==="users"&&isAdmin&&(
           <UsersView currentProfile={profile} showToast={showToast} iS={iS} Btn={Btn}/>
         )}
@@ -1292,13 +1246,11 @@ function ManagerView({products,blends,transactions,techs,onSave,onSaveBlends,onE
 // ════════════════════════════════════════════════════════════════════════════
 // ROOT — Supabase data layer
 // ════════════════════════════════════════════════════════════════════════════
-const SEED_TECHS = ["Alex","Jordan","Marcus","Sam","Taylor"];
 
 export default function App() {
   const [products, setProducts]         = useState(null);
   const [blends, setBlends]             = useState(null);
   const [transactions, setTransactions] = useState(null);
-  const [techs, setTechs]               = useState(null);
   const [mode, setMode]                 = useState("tech");
   const [techName, setTechName]         = useState("");
   const [error, setError]               = useState(null);
@@ -1354,12 +1306,10 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        // Load all four tables in parallel
-        const [pr, bl, tr, tc] = await Promise.all([
+        const [pr, bl, tr] = await Promise.all([
           supabase.from("products").select("*").order("id"),
           supabase.from("blends").select("*").order("id"),
           supabase.from("transactions").select("*").order("id", { ascending: false }),
-          supabase.from("techs").select("*").order("sort_order"),
         ]);
         if (pr.error || bl.error || tr.error) throw pr.error || bl.error || tr.error;
 
@@ -1377,18 +1327,6 @@ export default function App() {
           setBlends(SEED_BLENDS);
         } else {
           setBlends(bl.data);
-        }
-        // Seed techs if empty
-        if (!tc.error && tc.data.length === 0) {
-          const seedRows = SEED_TECHS.map((name, i) => ({ name, sort_order: i }));
-          const { error: tSeedErr } = await supabase.from("techs").insert(seedRows);
-          if (tSeedErr) throw tSeedErr;
-          setTechs(SEED_TECHS);
-        } else if (!tc.error) {
-          setTechs(tc.data.map(t => t.name));
-        } else {
-          // techs table may not exist yet — fall back to defaults
-          setTechs(SEED_TECHS);
         }
         setTransactions(tr.data);
       } catch (err) {
@@ -1471,17 +1409,6 @@ export default function App() {
     setBlends(updatedBlends);
   }, [blends]);
 
-  const saveTechs = useCallback(async (updatedTechs) => {
-    // Delete all existing and re-insert in order (simplest approach for a small list)
-    await supabase.from("techs").delete().neq("name", "__none__");
-    if (updatedTechs.length > 0) {
-      const rows = updatedTechs.map((name, i) => ({ name, sort_order: i }));
-      const { error } = await supabase.from("techs").insert(rows);
-      if (error) { console.error(error); return; }
-    }
-    setTechs(updatedTechs);
-  }, []);
-
   if (error) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",flexDirection:"column",gap:16,padding:24,textAlign:"center"}}>
       <div style={{fontSize:32}}>⚠️</div>
@@ -1490,7 +1417,7 @@ export default function App() {
     </div>
   );
 
-  if (!products || !blends || !transactions || !techs) return <Spinner />;
+  if (!products || !blends || !transactions) return <Spinner />;
 
   // ── Auth gates ──
   if (!session) return <Login />;
@@ -1508,7 +1435,6 @@ export default function App() {
       {mode === "tech" && (
         <TechView
           products={products} blends={blends} transactions={transactions}
-          techs={techs}
           techName={techName} setTechName={setTechName}
           onSave={saveProductsAndTxns}
           onManagerRequest={canAccessManager ? () => setMode("manager") : null}
@@ -1520,11 +1446,9 @@ export default function App() {
       {mode === "manager" && canAccessManager && (
         <ManagerView
           products={products} blends={blends} transactions={transactions}
-          techs={techs}
           onSave={saveProductsAndTxns}
           onSaveBlends={saveBlends}
           onSaveProducts={saveProducts}
-          onSaveTechs={saveTechs}
           onExit={() => setMode("tech")}
           profile={profile}
         />
