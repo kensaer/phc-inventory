@@ -940,12 +940,78 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
   const [dateTo,setDateTo]=useState(today());
   const [form,setForm]=useState({});
   const [saving,setSaving]=useState(false);
+  const [invDivision,setInvDivision]=useState("all"); // "all" | "phc" | "lawn"
+  const [invCategory,setInvCategory]=useState("all"); // "all" | any CATEGORIES entry
+  const [invSortBy,setInvSortBy]=useState("name");   // name|category|containers|volume|mix|cost|value|status|lastUsed
+  const [invSortDir,setInvSortDir]=useState("asc");  // asc | desc
+  const [invGrouped,setInvGrouped]=useState(false);
 
   const showToast=(msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast(null),3500);};
   const totalVal=products.reduce((s,p)=>s+(p.containers*(p.cost_per_container||0)),0);
   const filtUsage=transactions.filter(t=>t.type==="usage"&&(!dateFrom||t.date>=dateFrom)&&(!dateTo||t.date<=dateTo));
   const usageCost=filtUsage.reduce((s,t)=>s+(t.product_cost||0),0);
-  const filtP=products.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name));
+
+  // Latest usage date per product, computed once from the transactions list.
+  // Used for the "Last used" column and for the lastUsed sort.
+  const lastUsedByProduct = (() => {
+    const map = {};
+    for (const t of transactions) {
+      if (t.type !== "usage") continue;
+      if (t.subtype === "blend" && t.components?.length) {
+        for (const c of t.components) {
+          if (!map[c.product_id] || t.date > map[c.product_id]) map[c.product_id] = t.date;
+        }
+      } else if (t.product_id) {
+        if (!map[t.product_id] || t.date > map[t.product_id]) map[t.product_id] = t.date;
+      }
+    }
+    return map;
+  })();
+
+  // Stock status logic — honours per-product reorder_threshold when set,
+  // otherwise falls back to the app-wide 0.5 default.
+  const stockLevel = (p) => {
+    const threshold = (p.reorder_threshold != null && p.reorder_threshold !== "") ? Number(p.reorder_threshold) : 0.5;
+    if (p.containers <= 0) return "critical";
+    if (p.containers < threshold) return "low";
+    return "ok";
+  };
+  const stockRank = { critical: 0, low: 1, ok: 2 };
+
+  // Filtered + sorted product list for the Inventory tab.
+  const productMatches = (p) => {
+    if (invDivision !== "all") {
+      if (invDivision === "phc" && !(p.division === "phc" || p.division === "both" || !p.division)) return false;
+      if (invDivision === "lawn" && !(p.division === "lawn" || p.division === "both")) return false;
+    }
+    if (invCategory !== "all" && p.category !== invCategory) return false;
+    if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  };
+  const sortValue = (p, key) => {
+    switch (key) {
+      case "name": return (p.name || "").toLowerCase();
+      case "category": return (p.category || "").toLowerCase();
+      case "containers": return Number(p.containers) || 0;
+      case "volume": return totalVol(p);
+      case "mix": return Number(p.mix_rate) || 0;
+      case "cost": return Number(p.cost_per_container) || 0;
+      case "value": return (Number(p.containers) || 0) * (Number(p.cost_per_container) || 0);
+      case "status": return stockRank[stockLevel(p)] ?? 3;
+      case "lastUsed": return lastUsedByProduct[p.id] || "";
+      default: return 0;
+    }
+  };
+  const filtP = products.filter(productMatches).sort((a, b) => {
+    const av = sortValue(a, invSortBy), bv = sortValue(b, invSortBy);
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return invSortDir === "asc" ? cmp : -cmp;
+  });
+  const inventoryValue = filtP.reduce((s, p) => s + (p.containers * (p.cost_per_container || 0)), 0);
+  const setSort = (key) => {
+    if (invSortBy === key) setInvSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setInvSortBy(key); setInvSortDir("asc"); }
+  };
 
   const openLogUsage=()=>{setForm({date:today(),entries:[{type:"product",id:products[0]?.id||"",amount:""}]});setModal("logUsage");};
   const addUR=()=>setForm(f=>({...f,entries:[...f.entries,{type:"product",id:products[0]?.id||"",amount:""}]}));
@@ -973,7 +1039,7 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
     await onSave(updP,newT);setSaving(false);showToast(`Logged ${newT.length} entr${newT.length>1?"ies":"y"}`);setModal(null);
   };
 
-  const openRestock=()=>{setForm({date:today(),productId:products[0]?.id||"",containersAdded:"",vendor:"",notes:""});setModal("restock");};
+  const openRestock=(preId)=>{setForm({date:today(),productId:preId||products[0]?.id||"",containersAdded:"",vendor:"",notes:""});setModal("restock");};
   const submitRestock=async()=>{
     if(!form.productId||!form.containersAdded)return showToast("Fill in product and quantity.","error");
     const p=products.find(p=>p.id===parseInt(form.productId));if(!p)return;
@@ -983,14 +1049,14 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
     setSaving(false);showToast(`Restocked ${added} container${added>1?"s":""} of ${p.name}`);setModal(null);
   };
 
-  const openAddP=()=>{setEditTarget(null);setForm({name:"",category:"Pesticide",product_type:"mixed",containers:"",container_size:"",container_unit:"gal",mix_rate:"",mix_unit:"fl oz",mix_per:"100",cost_per_container:""});setModal("editProduct");};
+  const openAddP=()=>{setEditTarget(null);setForm({name:"",category:"Pesticide",division:"phc",product_type:"mixed",containers:"",container_size:"",container_unit:"gal",mix_rate:"",mix_unit:"fl oz",mix_per:"100",cost_per_container:"",reorder_threshold:""});setModal("editProduct");};
   const openEditP=(p)=>{setEditTarget(p);setForm({...p,product_type:p.mix_rate?"mixed":"direct",mix_rate:p.mix_rate??"",mix_per:p.mix_per?String(p.mix_per).replace(/[^\d.]/g,""):"100"});setModal("editProduct");};
   const submitProduct=async()=>{
     if(!form.name)return showToast("Product name required.","error");
     const s=buildSummary(form);if(s&&!s.valid)return showToast(s.error,"error");
     const isMix=form.product_type==="mixed",cs=parseFloat(form.container_size)||1,mu=isMix?form.mix_unit:form.container_unit,mp=isMix?(parseFloat(form.mix_per)||100):null,mr=isMix?(parseFloat(form.mix_rate)||null):null;
     let cr=null;if(isMix){const c=cvt(cs,form.container_unit,mu);cr=c!==null?c/cs:null;}else cr=1;
-    const cleaned={...form,containers:parseFloat(form.containers)||0,container_size:cs,mix_rate:mr,mix_unit:mu,mix_per:mp?`${mp} gal`:null,conversion_rate:cr,cost_per_container:form.cost_per_container!==""?parseFloat(form.cost_per_container):null};
+    const cleaned={...form,containers:parseFloat(form.containers)||0,container_size:cs,mix_rate:mr,mix_unit:mu,mix_per:mp?`${mp} gal`:null,conversion_rate:cr,cost_per_container:form.cost_per_container!==""?parseFloat(form.cost_per_container):null,division:form.division||"phc",reorder_threshold:form.reorder_threshold!==""&&form.reorder_threshold!=null?parseFloat(form.reorder_threshold):null};
     setSaving(true);
     if(editTarget){await onSaveProducts(products.map(p=>p.id===editTarget.id?{...cleaned,id:editTarget.id}:p));showToast(`${form.name} updated`);}
     else{await onSaveProducts([...products,{...cleaned,id:Date.now()}]);showToast(`${form.name} added`);}
@@ -1152,40 +1218,202 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
           </div>
         )}
 
-        {view==="inventory"&&(
-          <div style={{animation:"fadeUp 0.3s ease"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}><div><h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Inventory</h1><p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>{products.length} products · {fmt$(totalVal)}</p></div><div style={{display:"flex",gap:8}}><Btn onClick={exportInventoryCSV} color="ghost">↓ Export CSV</Btn><Btn onClick={openAddP}>+ Add Product</Btn></div></div>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search products…" style={{...iS,width:260,marginBottom:14}}/>
-            <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",overflow:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead><tr style={{background:"#f9fafb"}}>{["Product","Stock Status","Containers","Total Volume","Mix Rate","Cost/Container","Total Value",""].map(h=><th key={h} style={{padding:"10px 13px",textAlign:"left",fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",borderBottom:"1px solid #e5e7eb",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                <tbody>
-                  {filtP.map(p=>{
-                    const inB=blends.filter(b=>b.product_ids.includes(p.id));
-                    const lvl=p.containers<=0?"critical":p.containers<0.5?"low":"ok";
-                    const lvlColor=lvl==="critical"?"#dc2626":lvl==="low"?"#d97706":"#166534";
-                    const lvlBg=lvl==="critical"?"#fee2e2":lvl==="low"?"#fff7ed":"#f0fdf4";
-                    const lvlLabel=lvl==="critical"?"⚠ Out of stock":lvl==="low"?"⚠ Low stock":"✓ In stock";
-                    return(<tr key={p.id} className="trow" style={{borderBottom:"1px solid #f3f4f6",transition:"background 0.12s",background:lvl==="critical"?"#fff8f8":lvl==="low"?"#fffdf5":"#fff"}}>
-                      <td style={{padding:"10px 13px",fontWeight:600,color:"#111827",maxWidth:220}}><div>{p.name}</div>{inB.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:3}}>{inB.map(b=><span key={b.id} style={{fontSize:10,background:b.color+"18",color:b.color,padding:"1px 6px",borderRadius:99,fontWeight:700}}>🧬 {b.name}</span>)}</div>}</td>
-                      <td style={{padding:"10px 13px",whiteSpace:"nowrap"}}>
-                        <div style={{marginBottom:4}}><span style={{background:lvlBg,color:lvlColor,padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:700}}>{lvlLabel}</span></div>
-                        <div style={{background:"#e5e7eb",borderRadius:99,height:4,width:80}}><div style={{background:lvlColor,width:`${Math.min(100,p.containers*25)}%`,height:"100%",borderRadius:99,transition:"width 0.3s"}}/></div>
-                      </td>
-                      <td style={{padding:"10px 13px",color:"#374151",fontWeight:700,whiteSpace:"nowrap"}}>{fmtN(p.containers,2)}</td>
-                      <td style={{padding:"10px 13px",color:"#374151",whiteSpace:"nowrap"}}>{fmtN(totalVol(p))} {p.mix_unit||p.container_unit}</td>
-                      <td style={{padding:"10px 13px",whiteSpace:"nowrap"}}>{p.mix_rate?<span style={{background:"#f0fdf4",color:"#166534",padding:"2px 7px",borderRadius:99,fontWeight:700,fontSize:11}}>{p.mix_rate} {p.mix_unit}/{p.mix_per}</span>:<span style={{color:"#d1d5db"}}>Direct</span>}</td>
-                      <td style={{padding:"10px 13px",color:"#374151"}}>{fmt$(p.cost_per_container)}</td>
-                      <td style={{padding:"10px 13px",fontWeight:700,color:"#1a2e1a"}}>{fmt$(p.containers*(p.cost_per_container||0))}</td>
-                      <td style={{padding:"10px 10px",whiteSpace:"nowrap"}}><button onClick={()=>openEditP(p)} style={{background:"#f3f4f6",border:"none",borderRadius:5,padding:"4px 7px",cursor:"pointer",fontSize:12,marginRight:3}}>✏️</button><button onClick={()=>delProduct(p.id)} style={{background:"#fee2e2",border:"none",borderRadius:5,padding:"4px 7px",cursor:"pointer",fontSize:12}}>🗑️</button></td>
-                    </tr>);
-                  })}
-                </tbody>
-                <tfoot><tr style={{background:"#f9fafb",borderTop:"2px solid #e5e7eb"}}><td colSpan={7} style={{padding:"10px 13px",fontWeight:700,color:"#374151"}}>Total Inventory Value</td><td style={{padding:"10px 13px",fontWeight:700,color:"#1a2e1a",fontSize:14,fontFamily:"'Playfair Display',serif"}}>{fmt$(totalVal)}</td><td/></tr></tfoot>
-              </table>
+        {view==="inventory"&&(()=>{
+          const renderStatusBadge = (p) => {
+            const lvl = stockLevel(p);
+            const c = lvl==="critical"?"#dc2626":lvl==="low"?"#d97706":"#166534";
+            const bg = lvl==="critical"?"#fee2e2":lvl==="low"?"#fff7ed":"#f0fdf4";
+            const label = lvl==="critical"?"⚠ Out of stock":lvl==="low"?"⚠ Low stock":"✓ In stock";
+            return <span style={{background:bg,color:c,padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{label}</span>;
+          };
+          const renderRow = (p) => {
+            const inB = blends.filter(b=>b.product_ids.includes(p.id));
+            const lvl = stockLevel(p);
+            const lvlColor = lvl==="critical"?"#dc2626":lvl==="low"?"#d97706":"#166534";
+            const lastUsed = lastUsedByProduct[p.id];
+            return(
+              <tr key={p.id} className="trow" style={{borderBottom:"1px solid #f3f4f6",transition:"background 0.12s",background:lvl==="critical"?"#fff8f8":lvl==="low"?"#fffdf5":"#fff"}}>
+                <td style={{padding:"10px 13px",fontWeight:600,color:"#111827",maxWidth:240}}>
+                  <div>{p.name}</div>
+                  {p.division&&p.division!=="phc"&&<span style={{display:"inline-block",fontSize:10,color:p.division==="lawn"?"#0369a1":"#7e22ce",background:p.division==="lawn"?"#e0f2fe":"#f3e8ff",padding:"1px 6px",borderRadius:99,fontWeight:700,marginTop:3}}>{p.division==="lawn"?"LAWN":"PHC + LAWN"}</span>}
+                  {inB.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:3}}>{inB.map(b=><span key={b.id} style={{fontSize:10,background:b.color+"18",color:b.color,padding:"1px 6px",borderRadius:99,fontWeight:700}}>🧬 {b.name}</span>)}</div>}
+                </td>
+                <td style={{padding:"10px 13px",whiteSpace:"nowrap"}}>
+                  <div style={{marginBottom:4}}>{renderStatusBadge(p)}</div>
+                  <div style={{background:"#e5e7eb",borderRadius:99,height:4,width:80}}><div style={{background:lvlColor,width:`${Math.min(100,p.containers*25)}%`,height:"100%",borderRadius:99,transition:"width 0.3s"}}/></div>
+                </td>
+                <td style={{padding:"10px 13px",color:"#374151",fontWeight:700,whiteSpace:"nowrap"}}>{fmtN(p.containers,2)}</td>
+                <td style={{padding:"10px 13px",color:"#374151",whiteSpace:"nowrap"}}>{fmtN(totalVol(p))} {p.mix_unit||p.container_unit}</td>
+                <td style={{padding:"10px 13px",color:"#6b7280",fontSize:12,whiteSpace:"nowrap"}}>{p.category||"—"}</td>
+                <td style={{padding:"10px 13px",whiteSpace:"nowrap"}}>{p.mix_rate?<span style={{background:"#f0fdf4",color:"#166534",padding:"2px 7px",borderRadius:99,fontWeight:700,fontSize:11}}>{p.mix_rate} {p.mix_unit}/{p.mix_per}</span>:<span style={{color:"#d1d5db"}}>Direct</span>}</td>
+                <td style={{padding:"10px 13px",color:"#374151"}}>{fmt$(p.cost_per_container)}</td>
+                <td style={{padding:"10px 13px",fontWeight:700,color:"#1a2e1a"}}>{fmt$(p.containers*(p.cost_per_container||0))}</td>
+                <td style={{padding:"10px 13px",color:"#6b7280",fontSize:12,whiteSpace:"nowrap"}}>{lastUsed?fmtDate(lastUsed):<span style={{color:"#d1d5db"}}>—</span>}</td>
+                <td style={{padding:"10px 10px",whiteSpace:"nowrap"}}>
+                  <button title="Log Restock" onClick={()=>openRestock(p.id)} style={{background:"#dcfce7",border:"none",borderRadius:5,padding:"4px 8px",cursor:"pointer",fontSize:12,marginRight:3,color:"#166534",fontFamily:"inherit",fontWeight:600}}>+</button>
+                  <button title="Edit" onClick={()=>openEditP(p)} style={{background:"#f3f4f6",border:"none",borderRadius:5,padding:"4px 7px",cursor:"pointer",fontSize:12,marginRight:3}}>✏️</button>
+                  <button title="Delete" onClick={()=>delProduct(p.id)} style={{background:"#fee2e2",border:"none",borderRadius:5,padding:"4px 7px",cursor:"pointer",fontSize:12}}>🗑️</button>
+                </td>
+              </tr>
+            );
+          };
+          const renderCard = (p) => {
+            const inB = blends.filter(b=>b.product_ids.includes(p.id));
+            const lvl = stockLevel(p);
+            const lvlColor = lvl==="critical"?"#dc2626":lvl==="low"?"#d97706":"#166534";
+            const lastUsed = lastUsedByProduct[p.id];
+            return(
+              <div key={p.id} style={{background:"#fff",borderRadius:12,border:`1.5px solid ${lvl==="critical"?"#fecaca":lvl==="low"?"#fed7aa":"#e5e7eb"}`,padding:"14px 16px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:700,color:"#111827"}}>{p.name}</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>
+                      {p.category&&<span style={{fontSize:10,background:"#f3f4f6",color:"#6b7280",padding:"1px 7px",borderRadius:99,fontWeight:700}}>{p.category}</span>}
+                      {p.division&&p.division!=="phc"&&<span style={{fontSize:10,background:p.division==="lawn"?"#e0f2fe":"#f3e8ff",color:p.division==="lawn"?"#0369a1":"#7e22ce",padding:"1px 7px",borderRadius:99,fontWeight:700}}>{p.division==="lawn"?"LAWN":"PHC + LAWN"}</span>}
+                      {inB.map(b=><span key={b.id} style={{fontSize:10,background:b.color+"18",color:b.color,padding:"1px 7px",borderRadius:99,fontWeight:700}}>🧬 {b.name}</span>)}
+                    </div>
+                  </div>
+                  {renderStatusBadge(p)}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,fontSize:12,marginBottom:10}}>
+                  <div><div style={{color:"#9ca3af",fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Containers</div><div style={{color:"#111827",fontWeight:700,fontSize:15}}>{fmtN(p.containers,2)}</div></div>
+                  <div><div style={{color:"#9ca3af",fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Total Value</div><div style={{color:"#1a2e1a",fontWeight:700,fontSize:15}}>{fmt$(p.containers*(p.cost_per_container||0))}</div></div>
+                  <div><div style={{color:"#9ca3af",fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Volume</div><div style={{color:"#374151"}}>{fmtN(totalVol(p))} {p.mix_unit||p.container_unit}</div></div>
+                  <div><div style={{color:"#9ca3af",fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Last Used</div><div style={{color:"#374151"}}>{lastUsed?fmtDate(lastUsed):"—"}</div></div>
+                </div>
+                <div style={{background:"#e5e7eb",borderRadius:99,height:4,marginBottom:10}}><div style={{background:lvlColor,width:`${Math.min(100,p.containers*25)}%`,height:"100%",borderRadius:99}}/></div>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>openRestock(p.id)} style={{flex:1,background:"#dcfce7",border:"none",borderRadius:8,padding:"9px",cursor:"pointer",fontSize:13,color:"#166534",fontFamily:"inherit",fontWeight:700}}>+ Restock</button>
+                  <button onClick={()=>openEditP(p)} style={{background:"#f3f4f6",border:"none",borderRadius:8,padding:"9px 12px",cursor:"pointer",fontSize:13,fontFamily:"inherit",fontWeight:600,color:"#374151"}}>Edit</button>
+                  <button onClick={()=>delProduct(p.id)} style={{background:"#fee2e2",border:"none",borderRadius:8,padding:"9px 12px",cursor:"pointer",fontSize:13,color:"#dc2626",fontFamily:"inherit",fontWeight:600}}>Delete</button>
+                </div>
+              </div>
+            );
+          };
+          const SortHead = ({label,k,align})=>(
+            <th onClick={()=>setSort(k)} style={{padding:"10px 13px",textAlign:align||"left",fontSize:10,fontWeight:700,color:"#6b7280",letterSpacing:"0.07em",textTransform:"uppercase",borderBottom:"1px solid #e5e7eb",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"}}>
+              {label}{invSortBy===k&&<span style={{color:"#4a9e4a",marginLeft:4}}>{invSortDir==="asc"?"↑":"↓"}</span>}
+            </th>
+          );
+          const grouped = (() => {
+            const g = {};
+            for (const p of filtP) {
+              const cat = p.category || "Uncategorized";
+              (g[cat] = g[cat] || []).push(p);
+            }
+            return Object.entries(g).sort((a,b)=>a[0].localeCompare(b[0]));
+          })();
+          return(
+            <div style={{animation:"fadeUp 0.3s ease"}}>
+              <style>{`
+                .inv-table-wrap{background:#fff;border-radius:12px;border:1px solid #e5e7eb;overflow:auto}
+                .inv-cards-wrap{display:none}
+                @media (max-width: 900px){
+                  .inv-table-wrap{display:none}
+                  .inv-cards-wrap{display:flex;flex-direction:column;gap:10px}
+                }
+                .inv-th-hover:hover{background:#f3f4f6}
+              `}</style>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap",marginBottom:14}}>
+                <div>
+                  <h1 style={{margin:0,fontSize:25,fontFamily:"'Playfair Display',serif",color:"#1a2e1a"}}>Inventory</h1>
+                  <p style={{margin:"4px 0 0",color:"#6b7280",fontSize:13}}>{filtP.length} of {products.length} product{products.length===1?"":"s"} shown</p>
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <Btn onClick={exportInventoryCSV} color="ghost">↓ Export CSV</Btn>
+                  <Btn onClick={openAddP}>+ Add Product</Btn>
+                </div>
+              </div>
+              <div style={{background:"linear-gradient(135deg,#1a2e1a,#2d4a2d)",borderRadius:14,padding:"18px 24px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:"#8faf8f",letterSpacing:"0.15em",textTransform:"uppercase",marginBottom:4}}>{invDivision==="all"&&invCategory==="all"?"Total Inventory Value":"Filtered Inventory Value"}</div>
+                  <div style={{fontSize:28,fontWeight:700,color:"#fff",fontFamily:"'Playfair Display',serif",lineHeight:1}}>{fmt$(inventoryValue)}</div>
+                </div>
+                {(invDivision!=="all"||invCategory!=="all")&&(
+                  <div style={{fontSize:11,color:"#8faf8f",fontWeight:600,letterSpacing:"0.06em"}}>
+                    {invDivision!=="all"&&<span>Division: <strong style={{color:"#c5e1c5"}}>{invDivision.toUpperCase()}</strong></span>}
+                    {invDivision!=="all"&&invCategory!=="all"&&" · "}
+                    {invCategory!=="all"&&<span>Category: <strong style={{color:"#c5e1c5"}}>{invCategory}</strong></span>}
+                  </div>
+                )}
+              </div>
+              <div style={{display:"flex",gap:2,marginBottom:14,background:"#e5e7eb",borderRadius:10,padding:3,width:"fit-content"}}>
+                {[["all","All"],["phc","PHC"],["lawn","Lawn"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>setInvDivision(k)} style={{padding:"7px 20px",borderRadius:8,border:"none",background:invDivision===k?"#fff":"transparent",color:invDivision===k?"#1a2e1a":"#6b7280",fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer",boxShadow:invDivision===k?"0 1px 3px rgba(0,0,0,0.1)":"none",transition:"all 0.15s"}}>{l}</button>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:10,marginBottom:14,alignItems:"center",flexWrap:"wrap"}}>
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search products…" style={{...iS,width:220,flex:"1 1 200px",maxWidth:280}}/>
+                <select value={invCategory} onChange={e=>setInvCategory(e.target.value)} style={{...iS,width:180}}>
+                  <option value="all">All categories</option>
+                  {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:13,color:"#374151",fontWeight:600,cursor:"pointer",userSelect:"none"}}>
+                  <input type="checkbox" checked={invGrouped} onChange={e=>setInvGrouped(e.target.checked)} style={{cursor:"pointer",width:15,height:15}}/>
+                  Group by category
+                </label>
+              </div>
+              {filtP.length===0 ? (
+                <div style={{background:"#fff",borderRadius:14,border:"2px dashed #d1d5db",padding:44,textAlign:"center",color:"#9ca3af"}}>
+                  <div style={{fontSize:34,marginBottom:8}}>🌿</div>
+                  <div style={{fontWeight:600,marginBottom:4,color:"#6b7280"}}>No products match these filters.</div>
+                  <div style={{fontSize:13}}>Try clearing the search or switching the division.</div>
+                </div>
+              ) : invGrouped ? (
+                <div style={{display:"flex",flexDirection:"column",gap:18}}>
+                  {grouped.map(([cat, items]) => (
+                    <div key={cat}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#6b7280",letterSpacing:"0.15em",textTransform:"uppercase",marginBottom:8}}>{cat} · {items.length} {items.length===1?"product":"products"}</div>
+                      <div className="inv-table-wrap">
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                          <thead>
+                            <tr style={{background:"#f9fafb"}}>
+                              <SortHead label="Product" k="name"/>
+                              <SortHead label="Status" k="status"/>
+                              <SortHead label="Containers" k="containers"/>
+                              <SortHead label="Total Volume" k="volume"/>
+                              <SortHead label="Category" k="category"/>
+                              <SortHead label="Mix Rate" k="mix"/>
+                              <SortHead label="Cost/Container" k="cost"/>
+                              <SortHead label="Total Value" k="value"/>
+                              <SortHead label="Last Used" k="lastUsed"/>
+                              <th style={{borderBottom:"1px solid #e5e7eb"}}/>
+                            </tr>
+                          </thead>
+                          <tbody>{items.map(p=>renderRow(p))}</tbody>
+                        </table>
+                      </div>
+                      <div className="inv-cards-wrap">{items.map(p=>renderCard(p))}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div className="inv-table-wrap">
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                      <thead>
+                        <tr style={{background:"#f9fafb"}}>
+                          <SortHead label="Product" k="name"/>
+                          <SortHead label="Status" k="status"/>
+                          <SortHead label="Containers" k="containers"/>
+                          <SortHead label="Total Volume" k="volume"/>
+                          <SortHead label="Category" k="category"/>
+                          <SortHead label="Mix Rate" k="mix"/>
+                          <SortHead label="Cost/Container" k="cost"/>
+                          <SortHead label="Total Value" k="value"/>
+                          <SortHead label="Last Used" k="lastUsed"/>
+                          <th style={{borderBottom:"1px solid #e5e7eb"}}/>
+                        </tr>
+                      </thead>
+                      <tbody>{filtP.map(p=>renderRow(p))}</tbody>
+                    </table>
+                  </div>
+                  <div className="inv-cards-wrap">{filtP.map(p=>renderCard(p))}</div>
+                </>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {view==="blends"&&(
           <div style={{animation:"fadeUp 0.3s ease",maxWidth:680}}>
@@ -1300,6 +1528,7 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <FF label="Product Name" span2><input style={iS} value={form.name||""} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. BioPro ArborPlex 14-4-5"/></FF>
               <FF label="Category"><select style={iS} value={form.category||"Other"} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></FF>
+              <FF label="Division"><select style={iS} value={form.division||"phc"} onChange={e=>setForm(f=>({...f,division:e.target.value}))}><option value="phc">PHC only</option><option value="lawn">Lawn only</option><option value="both">Both (PHC + Lawn)</option></select></FF>
               <FF label="Cost Per Container ($)"><input type="number" style={iS} value={form.cost_per_container||""} onChange={e=>setForm(f=>({...f,cost_per_container:e.target.value}))} placeholder="0.00" min="0" step="0.01"/></FF>
             </div>
           </div>
@@ -1309,6 +1538,9 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
               <FF label="# Containers"><input type="number" style={iS} value={form.containers||""} onChange={e=>setForm(f=>({...f,containers:e.target.value}))} placeholder="2.5" min="0" step="any"/></FF>
               <FF label="Container Size"><input type="number" style={iS} value={form.container_size||""} onChange={e=>setForm(f=>({...f,container_size:e.target.value}))} placeholder="2.5" min="0" step="any"/></FF>
               <FF label="Container Unit"><select style={iS} value={form.container_unit||"gal"} onChange={e=>setForm(f=>({...f,container_unit:e.target.value}))}>{CONTAINER_UNITS.map(u=><option key={u}>{u}</option>)}</select></FF>
+              <FF label="Reorder Threshold" span2>
+                <input type="number" style={iS} value={form.reorder_threshold??""} onChange={e=>setForm(f=>({...f,reorder_threshold:e.target.value}))} placeholder="Warn when below N containers (default: 0.5)" min="0" step="any"/>
+              </FF>
             </div>
           </div>
           <div style={{marginBottom:14,borderTop:"1px solid #f3f4f6",paddingTop:12}}>
