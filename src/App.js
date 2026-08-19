@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import { supabase } from './supabase';
 import Login from './Login';
 import { getSession, getProfile, onAuthChange, signOut } from './auth';
@@ -1307,12 +1307,19 @@ export default function App() {
   const [profileChecked, setProfileChecked] = useState(false);
 
   // ── Auth (Phase 1B: login required, role-gated) ──
+  // currentUserId tracks the last user we fetched a profile for. Supabase
+  // fires onAuthStateChange on every token refresh (including tab-focus),
+  // and re-fetching the profile each time briefly unmounts the app UI —
+  // which reset the manager view back to Dashboard whenever the user
+  // switched tabs. Only refetch when the user actually changes.
+  const currentUserId = useRef(null);
   useEffect(() => {
     let mounted = true;
     (async () => {
       const s = await getSession();
       if (!mounted) return;
       setSession(s);
+      currentUserId.current = s?.user?.id || null;
       if (s) {
         const p = await getProfile();
         if (mounted) { setProfile(p); setProfileChecked(true); }
@@ -1321,7 +1328,10 @@ export default function App() {
       }
     })();
     const unsubscribe = onAuthChange(async (newSession) => {
+      const newUserId = newSession?.user?.id || null;
       setSession(newSession);
+      if (newUserId === currentUserId.current) return;  // same user, no reload
+      currentUserId.current = newUserId;
       if (newSession) {
         setProfileChecked(false);
         const p = await getProfile();
