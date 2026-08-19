@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, Fragment } from 'react';
 import { supabase } from './supabase';
 import Login from './Login';
 import { getSession, getProfile, onAuthChange, signOut } from './auth';
-import { listProfiles, inviteUser, updateUserRole, removeUser } from './adminUsers';
+import { listProfiles, inviteUser, updateUserRole, removeUser, resendSignInLink } from './adminUsers';
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
 const SEED_PRODUCTS = [
@@ -624,6 +624,8 @@ function UsersView({currentProfile, showToast, iS, Btn}){
   const [inviteForm, setInviteForm] = useState({email:"", full_name:"", role:"phc_tech"});
   const [pendingRow, setPendingRow] = useState(null); // user_id being modified
   const [confirmRemove, setConfirmRemove] = useState(null); // user object
+  const [linkModal, setLinkModal] = useState(null); // { title, subtitle, link, email }
+  const [copied, setCopied] = useState(false);
 
   const reload = async () => {
     try {
@@ -642,17 +644,52 @@ function UsersView({currentProfile, showToast, iS, Btn}){
     if (!email || !full_name) return showToast("Email and name are required.", "error");
     setInviting(true);
     try {
-      await inviteUser({email, full_name, role: inviteForm.role});
-      showToast(`Invite sent to ${email}`);
+      const res = await inviteUser({email, full_name, role: inviteForm.role});
       setShowInvite(false);
       setInviteForm({email:"", full_name:"", role:"phc_tech"});
       reload();
+      setLinkModal({
+        title: `Invite ready for ${full_name}`,
+        subtitle: `Send this sign-in link to ${email} however you like (text, Slack, in person). It signs them in the first time — after that their session persists.`,
+        link: res.action_link,
+        email,
+      });
     } catch (e) {
       showToast(e.message || "Invite failed", "error");
     } finally {
       setInviting(false);
     }
   };
+
+  const getSignInLink = async (u) => {
+    setPendingRow(u.id);
+    try {
+      const res = await resendSignInLink({email: u.email});
+      setLinkModal({
+        title: `Sign-in link for ${u.full_name}`,
+        subtitle: `Share this link with ${u.email}. Signs them in without needing an email.`,
+        link: res.action_link,
+        email: u.email,
+      });
+    } catch (e) {
+      showToast(e.message || "Could not generate link", "error");
+    } finally {
+      setPendingRow(null);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!linkModal?.link) return;
+    try {
+      await navigator.clipboard.writeText(linkModal.link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      showToast("Couldn't access clipboard — copy manually", "error");
+    }
+  };
+
+  const closeLinkModal = () => { setLinkModal(null); setCopied(false); };
 
   const changeRole = async (u, newRole) => {
     if (newRole === u.role) return;
@@ -719,7 +756,10 @@ function UsersView({currentProfile, showToast, iS, Btn}){
                   <td style={{padding:"10px 13px",color:"#6b7280",fontSize:12,whiteSpace:"nowrap"}}>{u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}</td>
                   <td style={{padding:"10px 10px",whiteSpace:"nowrap",textAlign:"right"}}>
                     {!isSelf && (
-                      <button onClick={()=>setConfirmRemove(u)} disabled={busy} style={{background:"#fee2e2",border:"none",borderRadius:5,padding:"5px 10px",cursor:busy?"default":"pointer",fontSize:12,color:"#dc2626",fontFamily:"inherit",fontWeight:600,opacity:busy?0.5:1}}>Remove</button>
+                      <>
+                        <button onClick={()=>getSignInLink(u)} disabled={busy} style={{background:"#eef2ff",border:"none",borderRadius:5,padding:"5px 10px",cursor:busy?"default":"pointer",fontSize:12,color:"#4338ca",fontFamily:"inherit",fontWeight:600,marginRight:6,opacity:busy?0.5:1}}>Get link</button>
+                        <button onClick={()=>setConfirmRemove(u)} disabled={busy} style={{background:"#fee2e2",border:"none",borderRadius:5,padding:"5px 10px",cursor:busy?"default":"pointer",fontSize:12,color:"#dc2626",fontFamily:"inherit",fontWeight:600,opacity:busy?0.5:1}}>Remove</button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -766,6 +806,24 @@ function UsersView({currentProfile, showToast, iS, Btn}){
               <Btn onClick={()=>doRemove(confirmRemove)} color="red" disabled={pendingRow===confirmRemove.id} style={{flex:1}}>{pendingRow===confirmRemove.id?"Removing…":"Yes, Remove"}</Btn>
               <Btn onClick={()=>setConfirmRemove(null)} color="ghost">Cancel</Btn>
             </div>
+          </div>
+        </div>
+      )}
+
+      {linkModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(10,20,10,0.6)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:520,padding:"22px 26px"}}>
+            <div style={{textAlign:"center",fontSize:30,marginBottom:8}}>🔗</div>
+            <h3 style={{margin:"0 0 6px",fontSize:19,fontFamily:"'Playfair Display',serif",color:"#1a2e1a",textAlign:"center"}}>{linkModal.title}</h3>
+            <p style={{margin:"0 0 16px",color:"#6b7280",fontSize:13,textAlign:"center",lineHeight:1.5}}>{linkModal.subtitle}</p>
+            <div style={{background:"#f9fafb",border:"1.5px solid #e5e7eb",borderRadius:10,padding:"10px 12px",marginBottom:12,wordBreak:"break-all",fontSize:12,fontFamily:"monospace",color:"#374151",maxHeight:120,overflow:"auto"}}>
+              {linkModal.link}
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <Btn onClick={copyLink} style={{flex:1}}>{copied?"✓ Copied":"Copy Link"}</Btn>
+              <Btn onClick={closeLinkModal} color="ghost">Done</Btn>
+            </div>
+            <p style={{margin:"12px 0 0",color:"#9ca3af",fontSize:11,textAlign:"center"}}>The link is one-use. If it gets used or expires, come back here and click "Get link" again for a fresh one.</p>
           </div>
         </div>
       )}

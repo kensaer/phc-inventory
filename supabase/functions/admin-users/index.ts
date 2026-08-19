@@ -16,6 +16,9 @@
 //
 // Actions the client can invoke via body.action:
 //   - "invite"      : { email, full_name, role, redirectTo }
+//                     → { ok, user_id, action_link }
+//   - "resend_link" : { email, redirectTo }
+//                     → { ok, action_link }
 //   - "update_role" : { user_id, role }
 //   - "remove"      : { user_id }
 //
@@ -101,17 +104,20 @@ serve(async (req) => {
         return json({ error: `Invalid role: ${role}` }, 400);
       }
 
-      // Sends the invite email and creates the auth.users row
-      const { data: invited, error: inviteErr } =
-        await admin.auth.admin.inviteUserByEmail(email, {
-          redirectTo: redirectTo || undefined,
-          data: { full_name },
+      // Create the auth user directly — does NOT send email.
+      // email_confirm: true marks the address verified so the magic link
+      // we generate below signs them in without a confirmation step.
+      const { data: created, error: createErr } =
+        await admin.auth.admin.createUser({
+          email,
+          email_confirm: true,
+          user_metadata: { full_name },
         });
-      if (inviteErr) return json({ error: inviteErr.message }, 400);
+      if (createErr) return json({ error: createErr.message }, 400);
 
       // Create the matching profile row
       const { error: profErr } = await admin.from("profiles").insert({
-        id: invited.user.id,
+        id: created.user.id,
         email,
         full_name,
         role,
@@ -119,11 +125,43 @@ serve(async (req) => {
       });
       if (profErr) {
         // Roll back the auth user so state stays consistent
-        await admin.auth.admin.deleteUser(invited.user.id);
+        await admin.auth.admin.deleteUser(created.user.id);
         return json({ error: profErr.message }, 400);
       }
 
-      return json({ ok: true, user_id: invited.user.id });
+      // Generate a one-time sign-in link. Also does NOT send email — the
+      // admin will copy this link and share it manually.
+      const { data: linkData, error: linkErr } =
+        await admin.auth.admin.generateLink({
+          type: "magiclink",
+          email,
+          options: { redirectTo: redirectTo || undefined },
+        });
+      if (linkErr) return json({ error: linkErr.message }, 400);
+
+      return json({
+        ok: true,
+        user_id: created.user.id,
+        action_link: linkData.properties.action_link,
+      });
+    }
+
+    if (action === "resend_link") {
+      const { email, redirectTo } = body;
+      if (!email) return json({ error: "Missing email" }, 400);
+
+      const { data: linkData, error: linkErr } =
+        await admin.auth.admin.generateLink({
+          type: "magiclink",
+          email,
+          options: { redirectTo: redirectTo || undefined },
+        });
+      if (linkErr) return json({ error: linkErr.message }, 400);
+
+      return json({
+        ok: true,
+        action_link: linkData.properties.action_link,
+      });
     }
 
     if (action === "update_role") {

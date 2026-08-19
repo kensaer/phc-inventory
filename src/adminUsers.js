@@ -35,6 +35,17 @@ export function inviteUser({ email, full_name, role }) {
   });
 }
 
+// Generate a fresh sign-in link for an existing user (e.g. someone got
+// logged out on a new device). Returns { ok, action_link } — the admin
+// copies the link and shares it manually.
+export function resendSignInLink({ email }) {
+  return callAdmin({
+    action: 'resend_link',
+    email,
+    redirectTo: window.location.origin,
+  });
+}
+
 export function updateUserRole({ user_id, role }) {
   return callAdmin({ action: 'update_role', user_id, role });
 }
