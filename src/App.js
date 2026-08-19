@@ -391,35 +391,131 @@ function TechView({products,blends,transactions,techName,setTechName,onSave,onMa
     </div>
   );
 
-  if(screen==="landing") return(
-    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#1a2e1a,#0d1a0d)",display:"flex",flexDirection:"column",paddingBottom:40}}>
-      <style>{`@keyframes fadeUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}.tech-btn:active{transform:scale(0.97)}`}</style>
-      <div style={{padding:"48px 24px 24px",textAlign:"center"}}>
-        <div style={{fontSize:11,fontWeight:700,color:"#4a9e4a",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:10}}>Plant Health Care</div>
-        <h1 style={{margin:0,fontSize:32,fontFamily:"'Playfair Display',serif",color:"#fff",lineHeight:1.2}}>Daily Usage<br/>Log</h1>
-        <p style={{margin:"12px 0 0",color:"#6b9e6b",fontSize:15}}>{new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</p>
-      </div>
-      {blends.length>0&&<div style={{padding:"0 20px 20px",maxWidth:420,margin:"0 auto",width:"100%",display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>{blends.map(b=><span key={b.id} style={{background:b.color+"22",border:`1px solid ${b.color}44`,color:b.color,fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:99}}>🧬 {b.name}</span>)}</div>}
-      <div style={{padding:"0 20px",animation:"fadeUp 0.4s ease"}}>
-        <div style={{maxWidth:420,margin:"0 auto",background:"rgba(255,255,255,0.07)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:14,padding:"18px 20px",textAlign:"center"}}>
-          <div style={{color:"#8faf8f",fontSize:11,fontWeight:700,letterSpacing:"0.15em",textTransform:"uppercase",marginBottom:6}}>Signed in as</div>
-          <div style={{color:"#fff",fontSize:18,fontWeight:700,marginBottom:16}}>{profile?.full_name || session?.user?.email}</div>
-          <button onClick={()=>{setEntries([{type:"product",id:"",amount:""}]);setLogDate(today());setScreen("log");}} style={{background:"linear-gradient(135deg,#2d6a2d,#4a9e4a)",border:"none",borderRadius:12,padding:"14px 24px",color:"#fff",fontSize:15,fontWeight:700,fontFamily:"inherit",cursor:"pointer",width:"100%",boxShadow:"0 4px 20px rgba(74,158,74,0.35)"}}>Start Logging →</button>
+  if(screen==="landing") {
+    const now = new Date();
+    const hour = now.getHours();
+    const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    const displayName = profile?.full_name || session?.user?.email || "";
+    const firstName = displayName.split(" ")[0].split("@")[0] || "there";
+    const todayStr = today();
+    const myTodayLogs = (transactions || []).filter(t =>
+      t.date === todayStr &&
+      t.tech_name === displayName &&
+      t.type === "usage"
+    );
+    const todayCount = myTodayLogs.length;
+    const todayCost = myTodayLogs.reduce((s, t) => s + (t.product_cost || 0), 0);
+    return(
+      <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#1a2e1a,#0d1a0d)",display:"flex",flexDirection:"column"}}>
+        <style>{`
+          @keyframes fadeUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+          .land-scroll{flex:1;display:flex;flex-direction:column;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+          .land-container{display:flex;flex-direction:column;gap:22px;padding:34px 20px 20px;max-width:900px;margin:0 auto;width:100%;box-sizing:border-box;flex:1}
+          .land-primary{display:flex;flex-direction:column;gap:20px;animation:fadeUp 0.4s ease}
+          .land-log{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px 20px;animation:fadeUp 0.5s ease 0.05s both}
+          .hero-btn{background:linear-gradient(135deg,#2d6a2d,#4a9e4a);border:none;border-radius:16px;padding:22px 24px;color:#fff;font-size:18px;font-weight:700;font-family:inherit;cursor:pointer;box-shadow:0 12px 32px rgba(74,158,74,0.35);width:100%;transition:transform 0.15s}
+          .hero-btn:active{transform:scale(0.98)}
+          .land-signout{text-align:center;padding:22px 0 8px}
+          .land-signout button{background:none;border:none;color:rgba(255,255,255,0.28);font-family:inherit;font-size:10px;font-weight:500;cursor:pointer;padding:6px 12px;text-decoration:underline;letter-spacing:0.04em}
+          .land-nav{display:flex;gap:6px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(13,26,13,0.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,0.08);position:fixed;bottom:0;left:0;right:0;z-index:50}
+          .nav-btn{flex:1;background:none;border:none;color:#8faf8f;font-family:inherit;font-size:11px;font-weight:600;padding:8px 4px;cursor:pointer;border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:3px;min-height:52px;transition:background 0.15s}
+          .nav-btn:active{background:rgba(255,255,255,0.08)}
+          .nav-icon{font-size:20px;line-height:1}
+          @media (min-width: 900px) {
+            .land-scroll{padding-bottom:20px}
+            .land-container{flex-direction:row;gap:32px;padding:60px 32px 20px;max-width:1100px;align-items:flex-start}
+            .land-primary{flex:1;max-width:480px}
+            .land-log{flex:1}
+            .land-nav{position:static;background:transparent;border-top:none;padding:12px 0 4px;max-width:900px;margin:8px auto 0;backdrop-filter:none;-webkit-backdrop-filter:none}
+            .nav-btn{color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04)}
+          }
+        `}</style>
+        <div className="land-scroll">
+          <div className="land-container">
+            <div className="land-primary">
+              <div>
+                <div style={{fontSize:11,fontWeight:700,color:"#4a9e4a",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:8}}>Plant Health Care</div>
+                <h1 style={{margin:0,fontSize:34,fontFamily:"'Playfair Display',serif",color:"#fff",lineHeight:1.15}}>Daily Log</h1>
+                <p style={{margin:"6px 0 0",color:"#6b9e6b",fontSize:13}}>{now.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</p>
+              </div>
+              <div>
+                <div style={{fontSize:22,fontWeight:700,color:"#fff",marginBottom:6}}>{greeting}, {firstName} 👋</div>
+                <div style={{fontSize:14,color:"#8faf8f",lineHeight:1.5}}>
+                  {todayCount === 0
+                    ? "Nothing logged yet today."
+                    : `You've logged ${todayCount} item${todayCount===1?"":"s"} today${todayCost>0?` · ${fmt$(todayCost)}`:""}.`}
+                </div>
+              </div>
+              <button className="hero-btn" onClick={()=>{setEntries([{type:"product",id:"",amount:""}]);setLogDate(today());setScreen("log");}}>
+                Start Logging →
+              </button>
+            </div>
+            <div className="land-log">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:14}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#8faf8f",letterSpacing:"0.15em",textTransform:"uppercase"}}>Today's Log</div>
+                <div style={{fontSize:11,color:"#4a9e4a",fontWeight:600}}>{todayCount} {todayCount===1?"entry":"entries"}</div>
+              </div>
+              {myTodayLogs.length === 0 ? (
+                <div style={{padding:"22px 12px",textAlign:"center",color:"rgba(255,255,255,0.35)",fontSize:13}}>
+                  Nothing yet — your logs today will show here.
+                </div>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {myTodayLogs.map(t => (
+                    <div key={t.id} style={{background:"rgba(255,255,255,0.05)",borderRadius:10,padding:"10px 12px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:600,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {t.subtype === "blend" ? `🧬 ${t.blend_name}` : t.product_name}
+                          </div>
+                          <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2}}>
+                            {t.subtype === "blend" ? `${t.input_amount} gal mix` : `${t.input_amount} ${t.input_unit||""}`}
+                          </div>
+                        </div>
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          <div style={{fontSize:12,color:"#fca5a5",fontWeight:700,whiteSpace:"nowrap"}}>
+                            {t.subtype === "blend"
+                              ? `${t.components?.length||0} products`
+                              : `−${fmtN(t.product_used)} ${t.product_unit||""}`}
+                          </div>
+                          {t.product_cost > 0 && (
+                            <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2}}>{fmt$(t.product_cost)}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="land-signout">
+            <button onClick={onSignOut}>Sign out</button>
+          </div>
+        </div>
+        <div className="land-nav">
+          <button className="nav-btn" onClick={()=>setScreen("inventory")}>
+            <span className="nav-icon">📦</span>
+            <span>Stock</span>
+          </button>
+          <button className="nav-btn" onClick={()=>setScreen("cheatsheet")}>
+            <span className="nav-icon">📋</span>
+            <span>Mix Rates</span>
+          </button>
+          <button className="nav-btn" onClick={()=>setScreen("calculators")}>
+            <span className="nav-icon">🧮</span>
+            <span>Calc</span>
+          </button>
+          {onManagerRequest && (
+            <button className="nav-btn" onClick={onManagerRequest}>
+              <span className="nav-icon">⚙</span>
+              <span>Manager</span>
+            </button>
+          )}
         </div>
       </div>
-      <div style={{padding:"28px 20px 0",display:"flex",gap:10,maxWidth:420,margin:"28px auto 0",width:"100%"}}>
-        <button onClick={()=>setScreen("inventory")} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 0",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>📦 Stock</button>
-        <button onClick={()=>setScreen("cheatsheet")} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 0",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>📋 Mix Rates</button>
-        <button onClick={()=>setScreen("calculators")} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"12px 0",color:"#8faf8f",fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>🧮 Calculators</button>
-        {onManagerRequest && (
-          <button onClick={onManagerRequest} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 0",color:"rgba(255,255,255,0.3)",fontSize:12,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>⚙ Manager</button>
-        )}
-      </div>
-      <div style={{padding:"24px 20px 16px",maxWidth:420,margin:"0 auto",width:"100%",textAlign:"center"}}>
-        <button onClick={onSignOut} style={{background:"none",border:"none",color:"rgba(255,255,255,0.5)",fontFamily:"inherit",fontSize:11,fontWeight:600,letterSpacing:"0.04em",cursor:"pointer",padding:0,textDecoration:"underline"}}>Sign out</button>
-      </div>
-    </div>
-  );
+    );
+  }
 
   if(screen==="log"){
     const canSubmit=entries.some(e=>e.id&&e.amount)&&!saving;
