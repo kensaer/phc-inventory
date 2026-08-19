@@ -469,6 +469,7 @@ function TechView({products,blends,transactions,techName,setTechName,onSave,onMa
                             {t.subtype === "blend" ? `🧬 ${t.blend_name}` : t.product_name}
                           </div>
                           <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2}}>
+                            {t.created_at ? new Date(t.created_at).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) + ' · ' : ''}
                             {t.subtype === "blend" ? `${t.input_amount} gal mix` : `${t.input_amount} ${t.input_unit||""}`}
                           </div>
                         </div>
