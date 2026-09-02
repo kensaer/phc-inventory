@@ -67,8 +67,14 @@ function totalVol(p){
   return p.containers*p.container_size*p.conversion_rate;
 }
 function cpUnit(p){
-  const v=totalVol(p),t=p.containers*(p.cost_per_container||0);
-  return v>0?t/v:0;
+  // Cost per unit of measurement — a property of the PRODUCT (cost of one
+  // container ÷ volume that container holds), not of the current inventory
+  // count. Historically this multiplied containers into both numerator and
+  // denominator, then short-circuited to 0 when containers hit 0 — which
+  // silently zeroed the cost on any usage logged from a depleted product.
+  const perContainerVol = (p.container_size || 0) * (p.conversion_rate || 1);
+  if (!perContainerVol || !p.cost_per_container) return 0;
+  return p.cost_per_container / perContainerVol;
 }
 function buildSummary(f){
   const ct=parseFloat(f.containers)||0,cs=parseFloat(f.container_size)||0,cpc=parseFloat(f.cost_per_container)||0,mr=parseFloat(f.mix_rate);
