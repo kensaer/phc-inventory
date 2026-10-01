@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import Login from './Login';
 import { getSession, getProfile, onAuthChange, signOut } from './auth';
 import { listProfiles, inviteUser, updateUserRole, removeUser, resendSignInLink } from './adminUsers';
+import GTCCountDay from './GTCCountDay';
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
 const SEED_PRODUCTS = [
@@ -340,7 +341,7 @@ function CalculatorsScreen({onBack,products,onLog}){
 // ════════════════════════════════════════════════════════════════════════════
 // TECH VIEW
 // ════════════════════════════════════════════════════════════════════════════
-function TechView({products,blends,transactions,techName,setTechName,onSave,onManagerRequest,session,profile,onSignOut}){
+function TechView({products,blends,transactions,techName,setTechName,onSave,onManagerRequest,onGTCRequest,session,profile,onSignOut}){
   const [screen,setScreen]=useState(techName?"log":"landing");
   const [logDate,setLogDate]=useState(today());
   const [entries,setEntries]=useState([{type:"product",id:"",amount:""}]);
@@ -538,6 +539,12 @@ function TechView({products,blends,transactions,techName,setTechName,onSave,onMa
             <span className="nav-icon">🧮</span>
             <span>Calc</span>
           </button>
+          {onGTCRequest && (
+            <button className="nav-btn" onClick={onGTCRequest}>
+              <span className="nav-icon">🌳</span>
+              <span>GTC</span>
+            </button>
+          )}
           {onManagerRequest && (
             <button className="nav-btn" onClick={onManagerRequest}>
               <span className="nav-icon">⚙</span>
@@ -969,7 +976,7 @@ function UsersView({currentProfile, showToast, iS, Btn}){
 // ════════════════════════════════════════════════════════════════════════════
 // MANAGER VIEW
 // ════════════════════════════════════════════════════════════════════════════
-function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,onSaveProducts,profile}){
+function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,onOpenGTC,onSaveProducts,profile}){
   const [view,setView]=useState("dashboard");
   const [modal,setModal]=useState(null);
   const [editTarget,setEditTarget]=useState(null);
@@ -1221,6 +1228,7 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
           <button onClick={openLogUsage} style={{width:"100%",background:"linear-gradient(135deg,#2d6a2d,#4a9e4a)",border:"none",borderRadius:7,color:"#fff",fontFamily:"inherit",fontSize:12,fontWeight:700,padding:"9px 0",cursor:"pointer",marginBottom:6}}>− Log Usage</button>
           <button onClick={openRestock}  style={{width:"100%",background:"rgba(74,158,74,0.15)",border:"1px solid rgba(74,158,74,0.3)",borderRadius:7,color:"#7dcf7d",fontFamily:"inherit",fontSize:12,fontWeight:700,padding:"8px 0",cursor:"pointer",marginBottom:6}}>+ Log Restock</button>
           <button onClick={exportCSV}    style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:7,color:"#aabfaa",fontFamily:"inherit",fontSize:12,fontWeight:600,padding:"8px 0",cursor:"pointer",marginBottom:6}}>↓ Export CSV</button>
+          <button onClick={onOpenGTC}    style={{width:"100%",background:"rgba(232,89,12,0.14)",border:"1px solid rgba(232,89,12,0.35)",borderRadius:7,color:"#ffb088",fontFamily:"inherit",fontSize:12,fontWeight:700,padding:"8px 0",cursor:"pointer",marginBottom:6}}>🌳 GTC Count Day</button>
           <button onClick={onExit}       style={{width:"100%",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:7,color:"rgba(255,255,255,0.3)",fontFamily:"inherit",fontSize:12,fontWeight:600,padding:"8px 0",cursor:"pointer"}}>← Tech View</button>
         </div>
         <div style={{padding:"8px 16px 16px",fontSize:10,color:"#4a7a4a"}}>{products.length} products · {blends.length} blends</div>
@@ -1843,7 +1851,7 @@ export default function App() {
   const canAccessManager = role === "admin" || role === "manager";
   const isGTC = role === "gtc_team_lead" || role === "gtc_tech";
 
-  if (isGTC) return <GTCPlaceholder profile={profile} onSignOut={signOut} />;
+  if (isGTC) return <GTCCountDay profile={profile} onSignOut={signOut} />;
 
   return (
     <>
@@ -1853,6 +1861,7 @@ export default function App() {
           techName={techName} setTechName={setTechName}
           onSave={saveProductsAndTxns}
           onManagerRequest={canAccessManager ? () => setMode("manager") : null}
+          onGTCRequest={canAccessManager ? () => setMode("gtc") : null}
           session={session}
           profile={profile}
           onSignOut={signOut}
@@ -1865,8 +1874,12 @@ export default function App() {
           onSaveBlends={saveBlends}
           onSaveProducts={saveProducts}
           onExit={() => setMode("tech")}
+          onOpenGTC={() => setMode("gtc")}
           profile={profile}
         />
+      )}
+      {mode === "gtc" && canAccessManager && (
+        <GTCCountDay profile={profile} onExit={() => setMode("tech")} onSignOut={signOut} />
       )}
     </>
   );
@@ -1887,17 +1900,3 @@ function NoAccessScreen({ email, onSignOut }) {
   );
 }
 
-function GTCPlaceholder({ profile, onSignOut }) {
-  return (
-    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#1a2e1a,#0d1a0d)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div style={{maxWidth:420,textAlign:"center",color:"#fff"}}>
-        <div style={{fontSize:44,marginBottom:14}}>🌳</div>
-        <h1 style={{margin:"0 0 10px",fontSize:24,fontFamily:"'Playfair Display',serif"}}>GTC Features Coming Soon</h1>
-        <p style={{color:"#8faf8f",fontSize:14,lineHeight:1.5,marginBottom:22}}>
-          Welcome, <strong style={{color:"#fff"}}>{profile.full_name}</strong>. GTC inventory and request features are still being built and will appear here once they're ready.
-        </p>
-        <button onClick={onSignOut} style={{background:"rgba(255,255,255,0.1)",border:"1.5px solid rgba(255,255,255,0.2)",borderRadius:10,padding:"11px 22px",color:"#fff",fontFamily:"inherit",fontSize:14,fontWeight:600,cursor:"pointer"}}>Sign Out</button>
-      </div>
-    </div>
-  );
-}

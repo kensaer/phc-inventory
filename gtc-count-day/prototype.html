@@ -1,0 +1,461 @@
+<title>GTC Gear Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: phone-first count-day checklist — sticky header with progress + search, category chips with per-category progress, inline count rows, bottom tabs (Count / Results / Items); data lives in the shared db. Glove-sized targets. */
+:root{
+  --bg:#f2f3ef; --surface:#ffffff; --fg:#1d2419; --muted:#5f685a; --line:#dcdfd6; --done:#f7f8f4;
+  --accent:#e8590c; --accent-fg:#ffffff;
+  --bark:#2f3a2a; --bark-fg:#f4f1e8;
+  --ok:#2f7d32; --ok-soft:#e3f1e3; --warn:#b26a00; --warn-soft:#fbefd9; --bad:#c62828; --bad-soft:#fbe3e3; --info:#1f5f99; --info-soft:#e2edf7;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141812; --surface:#1d231a; --fg:#eef0ea; --muted:#a3ab9c; --line:#323a2d; --done:#181d16;
+  --accent:#ff7a33; --accent-fg:#1a0d04; --bark:#0e110c; --bark-fg:#eef0ea;
+  --ok:#7fcf83; --ok-soft:#1f3320; --warn:#f0b54f; --warn-soft:#3a2c12; --bad:#ff8a80; --bad-soft:#3d1c1c; --info:#8cc2f2; --info-soft:#18293b;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141812; --surface:#1d231a; --fg:#eef0ea; --muted:#a3ab9c; --line:#323a2d; --done:#181d16;
+  --accent:#ff7a33; --accent-fg:#1a0d04; --bark:#0e110c; --bark-fg:#eef0ea;
+  --ok:#7fcf83; --ok-soft:#1f3320; --warn:#f0b54f; --warn-soft:#3a2c12; --bad:#ff8a80; --bad-soft:#3d1c1c; --info:#8cc2f2; --info-soft:#18293b;
+  color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.4}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.app{max-width:600px;margin:0 auto;min-height:100%}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bark);color:var(--bark-fg);padding:12px 16px;display:grid;gap:10px}
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.brand{font-family:var(--display);font-size:22px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;line-height:1}
+.brand small{display:block;font-family:var(--body);font-size:11px;font-weight:500;letter-spacing:.08em;opacity:.7;margin-top:4px;text-transform:uppercase}
+.prog{font-family:var(--display);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;text-align:right}
+.prog small{display:block;font-family:var(--body);font-size:11px;font-weight:500;opacity:.7;margin-top:4px}
+.bar{height:6px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .25s}
+.search{display:flex;align-items:center;gap:8px;background:var(--surface);color:var(--fg);border-radius:var(--r);padding:0 12px;min-height:46px}
+.search input{flex:1;border:0;background:transparent;font:inherit;font-size:16px;color:inherit;min-width:0;height:44px}
+.search input:focus{outline:none}
+.search:focus-within{box-shadow:0 0 0 3px var(--accent)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:12px 16px 4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 14px;font-size:14px;font-weight:600;min-height:42px;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.chip .n{font-weight:500;opacity:.65;margin-left:5px;font-variant-numeric:tabular-nums}
+.chip.full .n{opacity:1;color:var(--ok)}
+.chip.full[aria-pressed="true"] .n{color:inherit}
+.filt{display:flex;gap:4px;padding:8px 16px 0}
+.seg{flex:1;border:0;background:transparent;border-bottom:3px solid transparent;padding:8px 4px;font-weight:600;font-size:14px;color:var(--muted);min-height:42px}
+.seg[aria-pressed="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+main{padding:8px 16px calc(96px + env(safe-area-inset-bottom,0px))}
+.group{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin:16px 2px 8px}
+.list{display:grid;gap:8px}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:grid;gap:10px}
+.item.checked{background:var(--done)}
+.item.checked .name{color:var(--muted)}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.name{font-weight:600;font-size:16px;line-height:1.25;min-width:0}
+.sub{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;font-size:13px;color:var(--muted);align-items:center}
+.pill{display:inline-block;border-radius:5px;padding:2px 7px;font-size:12px;font-weight:600;line-height:1.5;white-space:nowrap}
+.p-ok{background:var(--ok-soft);color:var(--ok)} .p-low{background:var(--warn-soft);color:var(--warn)} .p-out{background:var(--bad-soft);color:var(--bad)} .p-ord{background:var(--info-soft);color:var(--info)} .p-type{background:transparent;border:1px solid var(--line);color:var(--muted)}
+.check{flex:none;width:28px;height:28px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;color:transparent}
+.checked .check{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.ctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.stepper{display:grid;grid-template-columns:48px 64px 48px;border:1.5px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg)}
+.stepper button{border:0;background:transparent;font-size:24px;font-weight:600;min-height:48px}
+.stepper input{border:0;border-left:1.5px solid var(--line);border-right:1.5px solid var(--line);background:var(--surface);color:var(--fg);text-align:center;font-family:var(--display);font-size:26px;font-weight:700;width:100%;min-width:0;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.minlbl{font-size:13px;color:var(--muted)}
+.minlbl button{border:0;background:none;padding:6px 4px;font-weight:600;color:var(--fg);text-decoration:underline;text-underline-offset:2px;min-height:36px}
+.go{margin-left:auto;min-height:48px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-fg);font-weight:700;padding:0 18px}
+.checked .go{background:transparent;border:1.5px solid var(--line);color:var(--muted);font-weight:600}
+.conds{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%}
+.cond{min-height:46px;border-radius:9px;border:1.5px solid var(--line);background:var(--surface);font-size:13px;font-weight:600;padding:4px;line-height:1.15}
+.cond[aria-pressed="true"][data-c="Good"]{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.cond[aria-pressed="true"]:not([data-c="Good"]){background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.note{width:100%;min-height:44px;border:1.5px solid var(--line);border-radius:9px;background:var(--bg);color:var(--fg);padding:0 12px;font:inherit;font-size:16px}
+.empty{text-align:center;color:var(--muted);padding:40px 16px}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs .in{max-width:600px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr}
+.tab{border:0;background:transparent;padding:10px 4px 12px;font-size:13px;font-weight:600;color:var(--muted);display:grid;justify-items:center;gap:3px;min-height:60px;position:relative}
+.tab svg{width:24px;height:24px}
+.tab[aria-selected="true"]{color:var(--accent)}
+.badge{position:absolute;top:6px;left:calc(50% + 8px);background:var(--bad);color:#fff;border-radius:999px;font-size:11px;padding:0 6px;line-height:18px;font-variant-numeric:tabular-nums}
+h2{font-family:var(--display);font-size:28px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;margin:14px 2px 4px;text-wrap:balance}
+.lede{color:var(--muted);font-size:14px;margin:0 2px 14px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 8px;text-align:center}
+.tile b{display:block;font-family:var(--display);font-size:32px;line-height:1;font-variant-numeric:tabular-nums}
+.tile span{font-size:12px;color:var(--muted);font-weight:600}
+.t-out b{color:var(--bad)} .t-low b{color:var(--warn)} .t-rep b{color:var(--bad)}
+.sec{margin-top:22px}
+.sec h3{font-size:13px;text-transform:uppercase;letter-spacing:.08em;margin:0 2px 8px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.rows{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.r{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
+.r:first-child{border-top:0}
+.r .nm{font-weight:600}
+.r .dt{font-size:13px;color:var(--muted)}
+.vend{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600;padding:10px 12px 4px;border-top:1px solid var(--line)}
+.vend:first-child{border-top:0}
+.sm{border:1.5px solid var(--line);background:transparent;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600;min-height:40px;white-space:nowrap}
+.sm.on{background:var(--info-soft);border-color:var(--info);color:var(--info)}
+.big{display:block;width:100%;min-height:52px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);font-weight:600;margin-top:10px}
+.big.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.big.warn{border-color:var(--bad);color:var(--bad)}
+.field{display:grid;gap:6px;margin-top:22px}
+.field label{font-size:13px;font-weight:600;color:var(--muted)}
+.field input{min-height:48px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);padding:0 12px;font:inherit;font-size:16px}
+.fine{font-size:12px;color:var(--muted);margin:14px 2px 0}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;z-index:30;max-width:calc(100% - 32px)}
+@media (max-width:380px){.cond{font-size:12px}.stepper{grid-template-columns:44px 56px 44px}}
+nav.tabs .in{grid-template-columns:repeat(3,1fr)}
+.banner{margin:12px 16px 0;padding:10px 12px;border-radius:var(--r);background:var(--info-soft);color:var(--info);font-size:14px;font-weight:500}
+.banner.bad{background:var(--bad-soft);color:var(--bad)}
+.mrow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
+.mrow:first-child{border-top:0}
+.mrow.arch .nm{color:var(--muted);text-decoration:line-through}
+.mrow .nm{font-weight:600}
+.mrow .dt{font-size:13px;color:var(--muted)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:0 2px 12px}
+.toolbar .big{margin:0;flex:1;min-width:140px}
+.scrim{position:fixed;inset:0;background:rgba(10,14,8,.5);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:600px;border-radius:16px 16px 0 0;padding:8px 16px calc(20px + env(safe-area-inset-bottom,0px));max-height:92%;overflow:auto;animation:up .18s ease-out}
+@keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}.bar i{transition:none}}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
+.sheet h4{font-size:20px;font-weight:600;margin:0 0 4px;line-height:1.25}
+.sheet .field{margin-top:14px}
+.sheet select,.sheet .field input{min-height:48px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);padding:0 12px;font:inherit;font-size:16px;width:100%}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.typeseg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.typeseg button{min-height:48px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);font-weight:600}
+.typeseg button[aria-pressed="true"]{border-color:var(--accent);background:var(--surface);color:var(--accent)}
+.help{font-size:12px;color:var(--muted);margin:2px 0 0}
+.sheetacts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px}
+.sheetacts .big{margin:0}
+</style>
+
+<div class="app">
+  <header>
+    <div class="top">
+      <div class="brand">GTC Count Day<small>Joshua Tree Experts · Tree Care</small></div>
+      <div class="prog" id="prog">–<small>checked</small></div>
+    </div>
+    <div class="bar" aria-hidden="true"><i id="barFill" style="width:0"></i></div>
+    <label class="search" for="q">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="q" type="search" placeholder="Find an item — chain, gloves, whoopie…" autocomplete="off">
+    </label>
+  </header>
+  <div id="banner"></div>
+
+  <section id="countView">
+    <div class="chips" id="chips" role="group" aria-label="Category"></div>
+    <div class="filt" role="group" aria-label="Show">
+      <button class="seg" data-f="todo" aria-pressed="true" type="button">Still to check</button>
+      <button class="seg" data-f="done" aria-pressed="false" type="button">Checked</button>
+      <button class="seg" data-f="all" aria-pressed="false" type="button">All</button>
+    </div>
+    <main id="countMain"><div class="empty">Loading the inventory list…</div></main>
+  </section>
+  <section id="resultsView" hidden><main id="resultsMain"></main></section>
+  <section id="itemsView" hidden><main id="itemsMain"></main></section>
+</div>
+
+<nav class="tabs" aria-label="Sections"><div class="in" role="tablist">
+  <button class="tab" role="tab" data-tab="count" aria-selected="true" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 2 2 4-4M8 16h8"/></svg>Count</button>
+  <button class="tab" role="tab" data-tab="results" aria-selected="false" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Results<span class="badge" id="resBadge" hidden></span></button>
+  <button class="tab" role="tab" data-tab="items" aria-selected="false" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><path d="m17 16 2 2 3-3"/></svg>Items</button>
+</div></nav>
+<div id="sheetHost"></div>
+<div id="toastHost"></div>
+
+<script>
+const CATS={saws:"Saws & Power",chain:"Chain & Sharpening",fuel:"Fuel & Oil",rigging:"Rigging & Climbing",cabling:"Cabling & Bracing",hand:"Hand Tools",safety:"Safety & PPE",truck:"Truck & Shop"};
+const VENDORS=["RBI / Shelter Tree","Home Depot","Big Toolbox","O'Reilly's","Amazon","Gregson & Clark","SiteOne"];
+const CONDS=["Good","Needs repair","Out of service","Missing"];
+
+let db=null,dl=null,mode="loading",canWrite=true;
+let ITEMS=new Map(),COUNTS=new Map(),META={who:""};
+let gotItems=false;
+const draft=new Map();
+let view={tab:"count",cat:"all",f:"todo",q:"",showArch:false};
+let dirty=false;
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const active=()=>[...ITEMS.values()].filter(i=>!i.archived);
+const rec=id=>COUNTS.get(id);
+const isChecked=id=>!!rec(id)?.checked;
+const shown=it=>{const r=rec(it.id);if(r&&r.checked)return r.count;if(draft.has(it.id))return draft.get(it.id);return it.last??null;};
+const finalCount=it=>{const r=rec(it.id);return r&&r.checked?r.count:(it.last??null);};
+const num=v=>(v===null||v===undefined||v===""||isNaN(v))?null:Number(v);
+function stock(it){const n=num(finalCount(it)),m=+it.min||0;if(n===null)return null;if(m>0&&n===0)return"out";if(m>0&&n<m)return"low";return"ok";}
+
+/* ---------- writes: one at a time per document ---------- */
+const queues=new Map();
+function enqueue(path,fn){const p=(queues.get(path)||Promise.resolve()).then(fn);queues.set(path,p.catch(()=>{}));return p;}
+async function write(path,fn){
+  if(!db){toast("Not connected to the shared list.");return false;}
+  if(!canWrite){toast("You can view this list but not change it.");return false;}
+  const run=()=>enqueue(path,fn);
+  try{await run();return true;}catch(e){
+    let err=e;
+    if(err&&err.code==="unavailable"){await sleep(300+Math.random()*600);try{await run();return true;}catch(e2){err=e2;}}
+    if(err&&err.code==="invalid_argument"){canWrite=false;renderAll();toast("You can view this list but not change it.");}
+    else if(err&&err.code==="quota_exceeded")toast("The list is full. Archive items you no longer stock.");
+    else if(err&&err.code==="resource_exhausted")toast("Saving too fast. Wait a second and try again.");
+    else toast("Couldn't save. Check your signal and try again.");
+    return false;}
+}
+const debouncers=new Map();
+function debounce(key,ms,fn){clearTimeout(debouncers.get(key));debouncers.set(key,setTimeout(fn,ms));}
+
+/* ---------- render ---------- */
+function focusInside(sel){const a=document.activeElement;const c=$(sel);return !!(a&&c&&c.contains(a)&&(a.tagName==="INPUT"||a.tagName==="SELECT"));}
+function banner(){
+  let h="";
+  if(mode==="nodb")h=`<div class="banner bad">This list only loads for people signed in to claude.ai who have access to it. Sign in, then reopen the link.</div>`;
+  else if(mode==="live"&&!canWrite)h=`<div class="banner">View only. Ask Ken for Contributor access to count or edit items.</div>`;
+  $("#banner").innerHTML=h;
+}
+function progress(){const a=active();const d=a.filter(i=>isChecked(i.id)).length;
+  $("#prog").innerHTML=a.length?`${d} / ${a.length}<small>checked</small>`:`–<small>checked</small>`;$("#barFill").style.width=a.length?(d/a.length*100)+"%":"0";}
+function renderChips(){
+  const a=active();
+  $("#chips").innerHTML=[["all","All"],...Object.entries(CATS)].map(([k,v])=>{const pool=a.filter(i=>k==="all"||i.cat===k);if(k!=="all"&&!pool.length)return"";const d=pool.filter(i=>isChecked(i.id)).length;
+    return `<button class="chip${pool.length&&d===pool.length?" full":""}" type="button" data-cat="${k}" aria-pressed="${view.cat===k}">${esc(v)}<span class="n">${d}/${pool.length}</span></button>`}).join("");}
+function pills(it){const r=rec(it.id),s=stock(it);let h="";
+  if(r&&r.checked&&it.type==="equip"&&r.cond&&r.cond!=="Good")h+=`<span class="pill p-out">${esc(r.cond)}</span>`;
+  if(s==="out")h+=`<span class="pill p-out">Out</span>`;else if(s==="low")h+=`<span class="pill p-low">Low</span>`;
+  if(it.ordered&&s!=="ok")h+=`<span class="pill p-ord">On order</span>`;return h;}
+function row(it){
+  const r=rec(it.id),checked=!!(r&&r.checked),c=shown(it),m=+it.min||0,id=it.id,dis=canWrite&&mode==="live"?"":" disabled";
+  let ctrl=`<div class="stepper"><button type="button" data-dec="${id}" aria-label="One fewer"${dis}>−</button><input id="c-${id}" type="number" inputmode="numeric" min="0" value="${c??""}" placeholder="?" data-cnt="${id}" aria-label="Count for ${esc(it.name)}"${dis}><button type="button" data-inc="${id}" aria-label="One more"${dis}>+</button></div>`;
+  if(it.type==="supply"){
+    ctrl=`<div class="ctrl">${ctrl}<span class="minlbl">min <button type="button" data-min="${id}" aria-label="Change minimum"${dis}>${m||"set"}</button></span><button class="go" type="button" data-ok="${id}"${dis}>${checked?"Checked":"Count ✓"}</button></div>`;
+  }else{
+    ctrl=`<div class="ctrl">${ctrl}${m?`<span class="minlbl">want ${m}</span>`:""}</div>
+    <div class="conds" role="group" aria-label="Condition">${CONDS.map(k=>`<button class="cond" type="button" data-cond="${id}" data-c="${k}" aria-pressed="${checked&&r.cond===k}"${dis}>${k==="Out of service"?"Out of<br>service":k}</button>`).join("")}</div>
+    ${checked&&r.cond&&r.cond!=="Good"?`<input class="note" id="n-${id}" data-note="${id}" placeholder="What's wrong? (optional)" value="${esc(r.note)}"${dis}>`:""}`;
+  }
+  return `<div class="item${checked?" checked":""}" id="it-${id}">
+    <div class="head"><div class="name">${esc(it.name)}<div class="sub"><span class="pill p-type">${it.type==="supply"?"Supply":"Equipment"}</span>${it.phc?"<span>PHC</span>":""}${pills(it)}${checked?"":`<span>Last count ${it.last??"—"}</span>`}</div></div><span class="check" aria-label="${checked?"Checked":"Not checked"}">✓</span></div>${ctrl}</div>`;
+}
+function renderCount(){
+  if(focusInside("#countMain")){dirty=true;return;}
+  dirty=false;
+  if(mode==="loading"){$("#countMain").innerHTML=`<div class="empty">Loading the inventory list…</div>`;return;}
+  if(mode==="nodb"){$("#countMain").innerHTML=`<div class="empty">The item list couldn't load here.</div>`;return;}
+  const a=active();
+  if(!a.length){$("#countMain").innerHTML=gotItems?`<div class="empty">No items yet. Add the first one on the Items tab.</div>`:`<div class="empty">Loading the inventory list…</div>`;return;}
+  const q=view.q.trim().toLowerCase();
+  const rows=a.filter(it=>(view.cat==="all"||it.cat===view.cat)&&(!q||it.name.toLowerCase().includes(q))&&(view.f==="all"||(view.f==="done")===isChecked(it.id)));
+  let h="";
+  if(!rows.length)h=view.f==="todo"&&!q?`<div class="empty">Everything here is checked. Pick another category or open Results.</div>`:`<div class="empty">Nothing matches. Try a shorter word or switch to All.</div>`;
+  else (view.cat==="all"?Object.keys(CATS):[view.cat]).forEach(c=>{const g=rows.filter(i=>i.cat===c).sort((x,y)=>(x.type===y.type?0:x.type==="supply"?-1:1)||x.name.localeCompare(y.name));if(!g.length)return;
+    h+=`<div class="group">${esc(CATS[c])}</div><div class="list">${g.map(row).join("")}</div>`;});
+  $("#countMain").innerHTML=h;
+}
+function refreshItem(id){const el=document.getElementById("it-"+id),it=ITEMS.get(id);if(!el||!it)return;if(el.contains(document.activeElement)&&document.activeElement.tagName==="INPUT"){dirty=true;return;}el.outerHTML=row(it);}
+function results(){const a=active();
+  return{out:a.filter(i=>stock(i)==="out"),low:a.filter(i=>stock(i)==="low"),
+    rep:a.filter(i=>i.type==="equip"&&isChecked(i.id)&&rec(i.id).cond&&rec(i.id).cond!=="Good"),
+    notYet:a.filter(i=>!isChecked(i.id)),total:a.length};}
+function buyQty(i){return Math.max(0,(+i.min||0)-(num(finalCount(i))||0));}
+function renderResults(){
+  const R=results(),buy=[...R.out,...R.low];
+  const b=$("#resBadge"),n=R.out.length+R.low.length+R.rep.length;b.hidden=!n;b.textContent=n;
+  if(focusInside("#resultsMain"))return;
+  if(mode!=="live"){$("#resultsMain").innerHTML=`<h2>Count day results</h2><div class="empty">Results appear once the list loads.</div>`;return;}
+  const groups={};buy.forEach(i=>(groups[i.vendor||"Vendor not set"]??=[]).push(i));
+  const dis=canWrite?"":" disabled";
+  let h=`<h2>Count day results</h2><p class="lede">${R.notYet.length?`${R.notYet.length} of ${R.total} items still to check. Results fill in as you go.`:`All ${R.total} items checked.`}</p>
+  <div class="tiles"><div class="tile t-out"><b>${R.out.length}</b><span>Out</span></div><div class="tile t-low"><b>${R.low.length}</b><span>Low</span></div><div class="tile t-rep"><b>${R.rep.length}</b><span>Gear issues</span></div><div class="tile"><b>${R.notYet.length}</b><span>Not checked</span></div></div>
+  <div class="toolbar" style="margin-top:14px"><button class="big primary" type="button" id="copySum">Copy summary to text</button>${dl?`<button class="big" type="button" id="dlCsv">Download spreadsheet</button>`:""}</div>`;
+  h+=`<div class="sec"><h3><span>Buy list · ${buy.length}</span></h3>`;
+  if(!buy.length)h+=`<div class="rows"><div class="r"><span class="dt">Nothing is out or low.</span></div></div>`;
+  else h+=`<div class="rows">`+Object.keys(groups).sort((x,y)=>groups[y].length-groups[x].length).map(v=>`<div class="vend">${esc(v)}</div>`+
+    groups[v].sort((x,y)=>(num(finalCount(x))||0)-(num(finalCount(y))||0)).map(i=>{const c=num(finalCount(i));return `<div class="r"><div><div class="nm">${esc(i.name)}</div><div class="dt">${c===0?"Out":"Have "+c} · min ${i.min} · buy ${buyQty(i)}</div></div>
+      <button class="sm${i.ordered?" on":""}" type="button" data-ord="${i.id}" aria-pressed="${!!i.ordered}"${dis}>${i.ordered?"On order":"Mark ordered"}</button></div>`}).join("")).join("")+`</div>`;
+  h+=`</div>`;
+  if(R.rep.length)h+=`<div class="sec"><h3><span>Gear issues · ${R.rep.length}</span></h3><div class="rows">`+R.rep.map(i=>{const r=rec(i.id);return `<div class="r"><div><div class="nm">${esc(i.name)}</div><div class="dt">${esc(r.cond)}${r.note?" — "+esc(r.note):""}</div></div><span></span></div>`}).join("")+`</div></div>`;
+  h+=`<div class="field"><label for="who">Counted by</label><input id="who" value="${esc(META.who)}" placeholder="Who did the count"${dis}></div>
+   ${R.notYet.length?`<button class="big" type="button" id="goTodo">Keep counting (${R.notYet.length} left)</button>`:""}
+   ${canWrite?`<button class="big warn" type="button" id="reset">Start a new count day</button>
+   <p class="fine">Starting a new count day clears every checkmark and saves today's numbers as the new "last count." Do it before the next inventory day, not right after this one, so everyone can still see these results.</p>`:""}`;
+  $("#resultsMain").innerHTML=h;
+}
+function renderItems(){
+  if(focusInside("#itemsMain"))return;
+  if(mode!=="live"){$("#itemsMain").innerHTML=`<h2>Items</h2><div class="empty">Items appear once the list loads.</div>`;return;}
+  const q=view.q.trim().toLowerCase();
+  const all=[...ITEMS.values()].filter(i=>!q||i.name.toLowerCase().includes(q));
+  const live=all.filter(i=>!i.archived),arch=all.filter(i=>i.archived);
+  const line=i=>`<div class="mrow${i.archived?" arch":""}"><div><div class="nm">${esc(i.name)}</div><div class="dt">${i.type==="supply"?"Supply":"Equipment"} · ${esc(CATS[i.cat]||"No category")}${i.min?` · min ${i.min}`:""}${i.vendor?` · ${esc(i.vendor)}`:""}</div></div>${canWrite?`<button class="sm" type="button" data-edit="${i.id}">Edit</button>`:"<span></span>"}</div>`;
+  let h=`<h2>Items</h2><p class="lede">Rename, recategorize, set minimums, add new items, or archive ones you no longer stock. Changes show up for everyone right away.</p>`;
+  if(canWrite)h+=`<div class="toolbar"><button class="big primary" type="button" id="addItem">Add an item</button></div>`;
+  (Object.keys(CATS)).forEach(c=>{const g=live.filter(i=>i.cat===c).sort((x,y)=>x.name.localeCompare(y.name));if(!g.length)return;
+    h+=`<div class="sec"><h3><span>${esc(CATS[c])} · ${g.length}</span></h3><div class="rows">${g.map(line).join("")}</div></div>`;});
+  const loose=live.filter(i=>!CATS[i.cat]);if(loose.length)h+=`<div class="sec"><h3><span>No category · ${loose.length}</span></h3><div class="rows">${loose.map(line).join("")}</div></div>`;
+  if(!live.length)h+=`<div class="empty">${q?"Nothing matches.":"No items yet."}</div>`;
+  if(arch.length)h+=`<div class="sec"><h3><span>Archived · ${arch.length}</span><button class="sm" type="button" id="togArch">${view.showArch?"Hide":"Show"}</button></h3>${view.showArch?`<div class="rows">${arch.sort((x,y)=>x.name.localeCompare(y.name)).map(line).join("")}</div>`:""}</div>`;
+  $("#itemsMain").innerHTML=h;
+}
+function renderAll(){banner();progress();renderChips();renderCount();renderResults();renderItems();}
+
+/* ---------- sheet: add / edit item ---------- */
+function closeSheet(){$("#sheetHost").innerHTML="";}
+function editSheet(id){
+  const it=id?ITEMS.get(id):{name:"",cat:view.cat!=="all"?view.cat:"hand",type:"supply",min:0,last:null,vendor:"",archived:false};
+  let type=it.type;
+  const vendOpts=["",...VENDORS,...(it.vendor&&!VENDORS.includes(it.vendor)?[it.vendor]:[])].map(v=>`<option value="${esc(v)}"${v===(it.vendor||"")?" selected":""}>${v?esc(v):"Not set"}</option>`).join("");
+  $("#sheetHost").innerHTML=`<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shT"><div class="grab"></div>
+   <h4 id="shT">${id?"Edit item":"Add an item"}</h4>
+   <div class="field"><label for="f-name">Name</label><input id="f-name" value="${esc(it.name)}" placeholder="e.g. Stihl 25&quot; Chain" autocomplete="off"></div>
+   <div class="field"><label>Type</label><div class="typeseg" role="group" aria-label="Type"><button type="button" data-ty="supply" aria-pressed="${type==="supply"}">Supply</button><button type="button" data-ty="equip" aria-pressed="${type==="equip"}">Equipment</button></div>
+     <p class="help">Supply = gets used up and reordered. Equipment = gets a condition check.</p></div>
+   <div class="field"><label for="f-cat">Category</label><select id="f-cat">${Object.entries(CATS).map(([k,v])=>`<option value="${k}"${k===it.cat?" selected":""}>${esc(v)}</option>`).join("")}</select></div>
+   <div class="two"><div class="field"><label for="f-min">Minimum to keep</label><input id="f-min" type="number" inputmode="numeric" min="0" value="${it.min??0}"></div>
+     <div class="field"><label for="f-last">Last count</label><input id="f-last" type="number" inputmode="numeric" min="0" value="${it.last??""}" placeholder="?"></div></div>
+   <div class="field"><label for="f-vend">Vendor</label><select id="f-vend">${vendOpts}</select></div>
+   <div class="sheetacts"><button class="big" type="button" id="shCancel">Cancel</button><button class="big primary" type="button" id="shSave">${id?"Save changes":"Add item"}</button>
+   ${id?`<button class="big ${it.archived?"":"warn"}" type="button" id="shArch" style="grid-column:1/-1">${it.archived?"Restore to the list":"Archive (no longer stocked)"}</button>`:""}</div>
+  </div></div>`;
+  $("#scrim").addEventListener("click",e=>{if(e.target.id==="scrim")closeSheet();});
+  document.querySelectorAll("[data-ty]").forEach(b=>b.onclick=()=>{type=b.dataset.ty;document.querySelectorAll("[data-ty]").forEach(x=>x.setAttribute("aria-pressed",x===b));});
+  $("#shCancel").onclick=closeSheet;
+  if(!id)$("#f-name").focus();
+  $("#shSave").onclick=async()=>{
+    const name=$("#f-name").value.trim();if(!name){toast("Give the item a name.");$("#f-name").focus();return;}
+    const body={name,type,cat:$("#f-cat").value,min:Math.max(0,parseInt($("#f-min").value,10)||0),last:num(parseInt($("#f-last").value,10)),vendor:$("#f-vend").value};
+    const btn=$("#shSave");btn.disabled=true;
+    let ok;
+    if(id)ok=await write("items/"+id,()=>db.doc("items/"+id).update(body));
+    else{const ref=db.collection("items").doc();ok=await write(ref.path,()=>ref.set({...body,ordered:false,phc:false,archived:false}));}
+    if(ok){closeSheet();toast(id?"Saved":"Item added");}else btn.disabled=false;
+  };
+  if(id)$("#shArch").onclick=async()=>{const to=!it.archived;if(await write("items/"+id,()=>db.doc("items/"+id).update({archived:to}))){closeSheet();toast(to?"Archived. It's off the checklist.":"Restored to the checklist");}};
+}
+
+/* ---------- actions ---------- */
+function toast(m){const t=document.createElement("div");t.className="toast";t.setAttribute("role","status");t.textContent=m;$("#toastHost").replaceChildren(t);setTimeout(()=>t.remove(),2400);}
+function setStepper(id,v){draft.set(id,v);const i=document.getElementById("c-"+id);if(i)i.value=v??"";if(isChecked(id))debounce("cnt"+id,600,()=>write("counts/"+id,()=>db.doc("counts/"+id).update({count:v})));}
+async function check(id,cond){
+  const it=ITEMS.get(id);const c=num(shown(it));
+  if(c===null){toast("Enter a count first");const i=document.getElementById("c-"+id);i&&i.focus();return;}
+  const body={count:c,checked:true,cond:it.type==="equip"?cond:null,note:rec(id)?.note||"",at:Date.now()};
+  if(await write("counts/"+id,()=>db.doc("counts/"+id).set(body))){draft.delete(id);if(it.type==="equip"&&cond!=="Good")setTimeout(()=>{const n=document.getElementById("n-"+id);n&&n.focus();},60);
+    else if(view.f==="todo")setTimeout(()=>renderCount(),500);}
+}
+async function uncheck(id){const r=rec(id);if(r)draft.set(id,r.count);await write("counts/"+id,()=>db.doc("counts/"+id).delete());}
+function csv(){
+  const R=results();const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const lines=[["Item","Category","Type","Count","Minimum","Status","Condition","Note","Buy","Vendor","On order","Checked"].join(",")];
+  active().sort((a,b)=>(CATS[a.cat]||"").localeCompare(CATS[b.cat]||"")||a.name.localeCompare(b.name)).forEach(i=>{const r=rec(i.id),s=stock(i);
+    lines.push([i.name,CATS[i.cat]||"",i.type==="supply"?"Supply":"Equipment",finalCount(i),i.min||0,s==="out"?"Out":s==="low"?"Low":s==="ok"?"OK":"Not counted",r&&r.checked&&i.type==="equip"?r.cond:"",r?.note||"",s==="out"||s==="low"?buyQty(i):"",i.vendor||"",i.ordered?"Yes":"",r&&r.checked?"Yes":"No"].map(q).join(","));});
+  return lines.join("\n");
+}
+function summary(){
+  const R=results(),d=new Date();const ds=`${d.getMonth()+1}/${d.getDate()}`;
+  const L=[`GTC inventory, ${ds}${META.who?` (counted by ${META.who})`:""}`];
+  L.push(`${R.total-R.notYet.length}/${R.total} items checked.`);
+  if(R.out.length)L.push("",`OUT (${R.out.length}):`,...R.out.map(i=>`- ${i.name}${i.ordered?" (on order)":""}`));
+  if(R.low.length)L.push("",`LOW (${R.low.length}):`,...R.low.map(i=>`- ${i.name}: have ${finalCount(i)}, min ${i.min}${i.ordered?" (on order)":""}`));
+  if(R.rep.length)L.push("",`GEAR ISSUES (${R.rep.length}):`,...R.rep.map(i=>`- ${i.name}: ${rec(i.id).cond}${rec(i.id).note?" — "+rec(i.id).note:""}`));
+  if(!R.out.length&&!R.low.length&&!R.rep.length)L.push("Nothing out, low, or damaged.");
+  return L.join("\n");
+}
+async function copyText(t,label){try{await navigator.clipboard.writeText(t);toast(label);}catch(e){
+  $("#sheetHost").innerHTML=`<div class="scrim" id="scrim"><div class="sheet"><div class="grab"></div><h4>Copy this text</h4><p class="help">Copying is blocked here. Select the text below and copy it.</p><textarea id="cpy" style="width:100%;min-height:240px;margin-top:10px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);padding:10px;font:inherit;font-size:14px">${esc(t)}</textarea><button class="big" type="button" id="shCancel">Close</button></div></div>`;
+  $("#shCancel").onclick=closeSheet;$("#scrim").addEventListener("click",e=>{if(e.target.id==="scrim")closeSheet();});const ta=$("#cpy");ta.focus();ta.select();}}
+async function resetDay(btn){
+  btn.disabled=true;const ids=[...COUNTS.keys()];let done=0;
+  btn.textContent=`Saving… 0/${ids.length}`;
+  for(let k=0;k<ids.length;k+=8){
+    await Promise.all(ids.slice(k,k+8).map(async id=>{const r=COUNTS.get(id);
+      if(r&&r.checked&&ITEMS.has(id)){await write("items/"+id,()=>db.doc("items/"+id).update({last:r.count}));}
+      await write("counts/"+id,()=>db.doc("counts/"+id).delete());done++;}));
+    btn.textContent=`Saving… ${done}/${ids.length}`;
+  }
+  await write("meta/day",()=>db.doc("meta/day").set({who:"",started:Date.now()}));
+  draft.clear();toast("New count day started");renderAll();
+}
+
+document.addEventListener("click",e=>{
+  const t=e.target;let el;
+  if(el=t.closest("[data-tab]")){view.tab=el.dataset.tab;document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",b===el));
+    $("#countView").hidden=view.tab!=="count";$("#resultsView").hidden=view.tab!=="results";$("#itemsView").hidden=view.tab!=="items";
+    if(view.tab==="count")renderCount();if(view.tab==="results")renderResults();if(view.tab==="items")renderItems();window.scrollTo(0,0);return;}
+  if(el=t.closest("[data-cat]")){view.cat=el.dataset.cat;renderChips();renderCount();return;}
+  if(el=t.closest("[data-f]")){view.f=el.dataset.f;document.querySelectorAll("[data-f]").forEach(b=>b.setAttribute("aria-pressed",b===el));renderCount();return;}
+  if(el=t.closest("[data-dec]")){const id=el.dataset.dec;const v=num(shown(ITEMS.get(id)));setStepper(id,Math.max(0,(v??1)-1));return;}
+  if(el=t.closest("[data-inc]")){const id=el.dataset.inc;const v=num(shown(ITEMS.get(id)));setStepper(id,(v??-1)+1);return;}
+  if(el=t.closest("[data-ok]")){const id=el.dataset.ok;isChecked(id)?uncheck(id):check(id);return;}
+  if(el=t.closest("[data-cond]")){const id=el.dataset.cond,c=el.dataset.c,r=rec(id);(r&&r.checked&&r.cond===c)?uncheck(id):check(id,c);return;}
+  if(el=t.closest("[data-min]")){const id=el.dataset.min,it=ITEMS.get(id);
+    el.outerHTML=`<input id="m-${id}" data-minin="${id}" type="number" inputmode="numeric" min="0" value="${it.min||0}" style="width:64px;min-height:40px;border:1.5px solid var(--accent);border-radius:8px;background:var(--surface);color:var(--fg);text-align:center;font-size:16px" aria-label="Minimum">`;
+    const i=document.getElementById("m-"+id);i.focus();i.select();return;}
+  if(el=t.closest("[data-ord]")){const id=el.dataset.ord,to=!ITEMS.get(id).ordered;write("items/"+id,()=>db.doc("items/"+id).update({ordered:to})).then(ok=>ok&&toast(to?"Marked on order":"On-order cleared"));return;}
+  if(el=t.closest("[data-edit]")){editSheet(el.dataset.edit);return;}
+  if(t.id==="addItem"){editSheet(null);return;}
+  if(t.id==="togArch"){view.showArch=!view.showArch;renderItems();return;}
+  if(t.id==="goTodo"){document.querySelector('[data-tab="count"]').click();return;}
+  if(t.id==="copySum"){copyText(summary(),"Summary copied. Paste it in your team text.");return;}
+  if(t.id==="dlCsv"){const d=new Date();dl.save({filename:`GTC inventory ${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}.csv`,data:csv()}).then(()=>toast("Spreadsheet saved"),err=>{if(err&&err.code==="declined")return;toast("Download isn't available here. Use Copy summary instead.");});return;}
+  if(t.id==="reset"){if(t.dataset.arm!=="1"){t.dataset.arm="1";t.textContent="Tap again to clear all checkmarks";setTimeout(()=>{if(t.isConnected&&!t.disabled){t.dataset.arm="";t.textContent="Start a new count day";}},4000);return;}resetDay(t);return;}
+});
+document.addEventListener("input",e=>{const t=e.target;
+  if(t.dataset.cnt!==undefined){const id=t.dataset.cnt,v=t.value===""?null:Math.max(0,parseInt(t.value,10));draft.set(id,isNaN(v)?null:v);
+    if(isChecked(id)&&v!==null&&!isNaN(v))debounce("cnt"+id,700,()=>write("counts/"+id,()=>db.doc("counts/"+id).update({count:v})));}
+  if(t.dataset.note!==undefined){const id=t.dataset.note,v=t.value;debounce("note"+id,700,()=>write("counts/"+id,()=>db.doc("counts/"+id).update({note:v})));}
+  if(t.id==="who"){const v=t.value;debounce("who",800,()=>write("meta/day",()=>db.doc("meta/day").set({...META,who:v})));}
+  if(t.id==="q"){view.q=t.value;if(view.tab==="results")document.querySelector('[data-tab="count"]').click();view.tab==="items"?renderItems():renderCount();}
+});
+document.addEventListener("focusout",e=>{const t=e.target;
+  if(t.dataset&&t.dataset.minin!==undefined){const id=t.dataset.minin,v=parseInt(t.value,10),it=ITEMS.get(id);
+    if(!isNaN(v)&&v>=0&&v!==(+it.min||0))write("items/"+id,()=>db.doc("items/"+id).update({min:v}));
+    setTimeout(()=>refreshItem(id),0);}
+  setTimeout(()=>{if(dirty&&!focusInside("#countMain"))renderCount();if(!focusInside("#resultsMain"))renderResults();progress();renderChips();},300);
+});
+document.addEventListener("keydown",e=>{const t=e.target;
+  if(e.key==="Escape")closeSheet();
+  if(e.key==="Enter"&&t.dataset&&(t.dataset.minin!==undefined||t.dataset.note!==undefined||t.id==="who"))t.blur();
+  if(e.key==="Enter"&&t.dataset&&t.dataset.cnt!==undefined){const id=t.dataset.cnt,it=ITEMS.get(id);t.blur();if(!isChecked(id)&&it.type==="supply")check(id);}
+});
+
+/* ---------- connect ---------- */
+renderAll();
+(async()=>{
+  const C=window.claude;
+  if(!C||!C.use){mode="nodb";renderAll();return;}
+  const [d,u,dd]=await Promise.all([C.use("db").catch(()=>null),C.use("user").catch(()=>null),C.use("downloads").catch(()=>null)]);
+  db=d;dl=dd;
+  if(!db){mode="nodb";renderAll();return;}
+  if(u){try{const w=await u.can("data.write");if(w===false)canWrite=false;}catch(e){}}
+  mode="live";renderAll();
+  const fail=e=>{if(e&&e.code==="revoked"){mode="nodb";renderAll();}else toast("Lost connection to the list. Reload the page.");};
+  db.collection("items").onSnapshot(s=>{gotItems=true;
+    const before=new Set(active().map(i=>i.id));
+    ITEMS=new Map(s.docs.map(x=>[x.id,{id:x.id,...x.data()}]));
+    const after=active().map(i=>i.id);
+    const changedSet=after.length!==before.size||after.some(id=>!before.has(id));
+    banner();progress();renderChips();
+    if(changedSet)renderCount();else s.docChanges().forEach(c=>refreshItem(c.doc.id));
+    renderResults();renderItems();
+  },fail);
+  db.collection("counts").onSnapshot(s=>{
+    COUNTS=new Map(s.docs.map(x=>[x.id,x.data()]));
+    progress();renderChips();s.docChanges().forEach(c=>refreshItem(c.doc.id));renderResults();
+  },fail);
+  db.doc("meta/day").onSnapshot(s=>{META=s.exists?{who:"",...s.data()}:{who:""};renderResults();},()=>{});
+})();
+</script>
