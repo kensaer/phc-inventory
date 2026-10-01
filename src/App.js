@@ -203,7 +203,28 @@ function CalcResult({label,value,unit,highlight}){
   );
 }
 
-function ShortstopCalc(){
+// "Log this amount" button under a calculator's result. Sends just the
+// product amount (never water or total solution) to the usage log, and
+// refuses if the product isn't set to log in mL — the calculators only
+// output mL, so any other unit would record a wildly wrong amount.
+function CalcLogButton({product,amount,label,onLog}){
+  if(!onLog||!(amount>0)) return null;
+  if(!product) return null;
+  const unit=product.mix_unit||product.container_unit;
+  if(product.mix_rate||unit!=="mL") return(
+    <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"8px 12px",marginTop:10,fontSize:12,color:"#b91c1c"}}>
+      {label} is set to log in <strong>{product.mix_rate?"gal of mix":unit}</strong>, not mL. Ask a manager to fix it in Inventory before logging from here.
+    </div>
+  );
+  const amt=Math.round(amount*100)/100;
+  return(
+    <button onClick={()=>onLog(product.id,amt)} style={{width:"100%",marginTop:10,background:"linear-gradient(135deg,#2d6a2d,#4a9e4a)",border:"none",borderRadius:10,padding:"13px",color:"#fff",fontSize:15,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+      Log {amt} mL of {label} →
+    </button>
+  );
+}
+
+function ShortstopCalc({product,onLog}){
   const [dbh,setDbh]=useState("");
   const [volPerInch,setVolPerInch]=useState("");
   const d=parseFloat(dbh)||0, v=parseFloat(volPerInch)||0;
@@ -224,13 +245,14 @@ function ShortstopCalc(){
           <CalcResult label="mL of Shortstop" value={fmtML(shortstop)} unit="mL" highlight/>
           <CalcResult label="mL of Water" value={fmtML(water)} unit="mL"/>
           <CalcResult label="Total Solution" value={fmtML(total)} unit="mL"/>
+          <CalcLogButton product={product} amount={shortstop} label="Shortstop" onLog={onLog}/>
         </div>
       )}
     </CalcCard>
   );
 }
 
-function PhosphoJetCalc(){
+function PhosphoJetCalc({product,onLog}){
   const [dbh,setDbh]=useState("");
   const d=parseFloat(dbh)||0;
   const sites = d>0 ? Math.round(d/2) : null;
@@ -253,13 +275,14 @@ function PhosphoJetCalc(){
           <div style={{background:"#fdf4ff",border:"1px solid #e9d5ff",borderRadius:8,padding:"8px 12px",marginTop:8,fontSize:12,color:"#7e22ce"}}>
             Mix ratio: 1 part PhosphoJet to 2 parts water
           </div>
+          <CalcLogButton product={product} amount={phospho} label="PhosphoJet" onLog={onLog}/>
         </div>
       )}
     </CalcCard>
   );
 }
 
-function MnJetCalc(){
+function MnJetCalc({product,onLog}){
   const [dbh,setDbh]=useState("");
   const [rate,setRate]=useState("low");
   const d=parseFloat(dbh)||0;
@@ -286,13 +309,15 @@ function MnJetCalc(){
           <CalcResult label="Number of Injection Sites" value={sites} unit="sites"/>
           <CalcResult label="Total MnJet Volume" value={fmtML(totalVol)} unit="mL" highlight/>
           <CalcResult label="Volume per Injection Site" value={fmtML(volPerSite)} unit="mL/site" highlight/>
+          <CalcLogButton product={product} amount={totalVol} label="MnJet" onLog={onLog}/>
         </div>
       )}
     </CalcCard>
   );
 }
 
-function CalculatorsScreen({onBack}){
+function CalculatorsScreen({onBack,products,onLog}){
+  const find=re=>(products||[]).find(p=>re.test(p.name));
   return(
     <div style={{minHeight:"100vh",background:"#f0f4f0"}}>
       <div style={{background:"linear-gradient(135deg,#1a2e1a,#2d4a2d)",padding:"18px 16px",position:"sticky",top:0,zIndex:10}}>
@@ -304,9 +329,9 @@ function CalculatorsScreen({onBack}){
       </div>
       <div style={{padding:"16px",maxWidth:500,margin:"0 auto",paddingBottom:40}}>
         <p style={{fontSize:13,color:"#6b7280",marginBottom:16,textAlign:"center"}}>Enter tree measurements to calculate product volumes for trunk injections and soil drenches.</p>
-        <ShortstopCalc/>
-        <PhosphoJetCalc/>
-        <MnJetCalc/>
+        <ShortstopCalc product={find(/shortstop/i)} onLog={onLog}/>
+        <PhosphoJetCalc product={find(/phosphojet/i)} onLog={onLog}/>
+        <MnJetCalc product={find(/mnjet/i)} onLog={onLog}/>
       </div>
     </div>
   );
@@ -624,7 +649,15 @@ function TechView({products,blends,transactions,techName,setTechName,onSave,onMa
     );
   }
 
-  if(screen==="calculators") return <CalculatorsScreen onBack={()=>setScreen(techName?"log":"landing")}/>;
+  // From a calculator: add the product amount to the log form (replacing the
+  // blank starter entry if that's all there is) and open the log screen.
+  const logFromCalc=(productId,amount)=>{
+    const entry={type:"product",id:String(productId),amount:String(amount)};
+    setEntries(es=>es.length===1&&!es[0].id&&!es[0].amount?[entry]:[...es,entry]);
+    setScreen("log");
+  };
+
+  if(screen==="calculators") return <CalculatorsScreen onBack={()=>setScreen(techName?"log":"landing")} products={products} onLog={logFromCalc}/>;
 
   return null;
 }
