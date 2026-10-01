@@ -989,6 +989,8 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
   const totalVal=products.reduce((s,p)=>s+(p.containers*(p.cost_per_container||0)),0);
   const filtUsage=transactions.filter(t=>t.type==="usage"&&(!dateFrom||t.date>=dateFrom)&&(!dateTo||t.date<=dateTo));
   const usageCost=filtUsage.reduce((s,t)=>s+(t.product_cost||0),0);
+  const filtRestock=transactions.filter(t=>t.type==="restock"&&(!dateFrom||t.date>=dateFrom)&&(!dateTo||t.date<=dateTo));
+  const restockSpend=filtRestock.reduce((s,t)=>s+(t.total_cost_added||0),0);
 
   // Latest usage date per product, computed once from the transactions list.
   // Used for the "Last used" column and for the lastUsed sort.
@@ -1473,7 +1475,12 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
               <span style={{color:"#9ca3af"}}>to</span>
               <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{...iS,width:145,fontSize:13}}/>
               <button onClick={()=>{setDateFrom("");setDateTo(today());}} style={{background:"none",border:"none",color:"#4a9e4a",fontWeight:600,fontSize:13,cursor:"pointer"}}>Reset</button>
-              {filtUsage.length>0&&<span style={{marginLeft:"auto",fontWeight:700,color:"#374151",fontSize:13}}>Usage cost: {fmt$(usageCost)}</span>}
+              {(filtUsage.length>0||filtRestock.length>0)&&(
+                <span style={{marginLeft:"auto",display:"flex",gap:16,flexWrap:"wrap",fontWeight:700,fontSize:13}}>
+                  <span style={{color:"#dc2626"}}>Usage cost: {fmt$(usageCost)}</span>
+                  <span style={{color:"#16a34a"}}>Restock spend: {fmt$(restockSpend)}</span>
+                </span>
+              )}
             </div>
             <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",overflow:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
