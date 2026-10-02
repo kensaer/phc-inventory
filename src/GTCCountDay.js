@@ -46,6 +46,15 @@ export default function GTCCountDay({ profile, onExit, onSignOut }) {
   const [resetArmed, setResetArmed] = useState(false);
   const [resetting, setResetting]   = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
+  // The how-to guide opens by itself the first time someone uses Count Day on
+  // this phone; after that it's behind the "?" button in the header.
+  const [showHelp, setShowHelp] = useState(() => {
+    try { return !localStorage.getItem("gtc-help-seen"); } catch { return false; }
+  });
+  const closeHelp = () => {
+    setShowHelp(false);
+    try { localStorage.setItem("gtc-help-seen", "1"); } catch { /* storage blocked: guide just reappears next time */ }
+  };
 
   const timers = useRef({});
   const debounce = (key, ms, fn) => { clearTimeout(timers.current[key]); timers.current[key] = setTimeout(fn, ms); };
@@ -436,7 +445,10 @@ export default function GTCCountDay({ profile, onExit, onSignOut }) {
             {onExit && <button type="button" className="hdrbtn" onClick={onExit}>← PHC app</button>}
             GTC Count Day<small>Joshua Tree Experts · Tree Care</small>
           </div>
-          <div className="prog">{R.total ? `${checkedN} / ${R.total}` : "–"}<small>checked</small></div>
+          <div className="topright">
+            <button type="button" className="helpbtn" aria-label="How Count Day works" onClick={() => setShowHelp(true)}>?</button>
+            <div className="prog">{R.total ? `${checkedN} / ${R.total}` : "–"}<small>checked</small></div>
+          </div>
         </div>
         <div className="bar" aria-hidden="true"><i style={{ width: R.total ? `${checkedN / R.total * 100}%` : 0 }} /></div>
         <label className="search">
@@ -504,7 +516,49 @@ export default function GTCCountDay({ profile, onExit, onSignOut }) {
         </div>
       )}
 
+      {showHelp && <HelpSheet canEdit={canEdit} onClose={closeHelp} />}
+
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
+    </div>
+  );
+}
+
+// How-to guide for the crew. Team leads get the extra "Team leads" section.
+function HelpSheet({ canEdit, onClose }) {
+  return (
+    <div className="scrim" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="sheet help-sheet" role="dialog" aria-modal="true" aria-labelledby="gtc-help-title"><div className="grab" />
+        <h4 id="gtc-help-title">How Count Day works</h4>
+        <p className="help">Go through the shop and check off every item. Everything saves the moment you tap, so a dead phone loses nothing, and several people can count at the same time.</p>
+
+        <h5>Counting</h5>
+        <ol>
+          <li><b>Pick a category</b> at the top, or stay on All. "Still to check" shows only what's left, so checked items drop off the list.</li>
+          <li><b>Supplies</b> (chain, files, fuel, gloves…): the box starts at the last count. Fix it with <b>−</b> / <b>+</b> or type the number, then tap <b>Count ✓</b>.</li>
+          <li><b>Equipment</b> (saws, rigging, tools, PPE): set the number, then tap its condition: <b>Good</b>, <b>Needs repair</b>, <b>Out of service</b> or <b>Missing</b>. If it isn't Good, type what's wrong.</li>
+          <li><b>Made a mistake?</b> Tap <b>Checked</b> (or the condition you picked) again to uncheck it, fix the number, and check it off again.</li>
+          <li><b>Can't find something?</b> Use the search box at the top.</li>
+        </ol>
+
+        <h5>When you're done</h5>
+        <ol>
+          <li>Open <b>Results</b> to see what's out, what's low, and any gear problems. The buy list is grouped by where we buy it.</li>
+          <li>Put your name in <b>Counted by</b>.</li>
+          <li>Tap <b>Copy summary to text</b> and paste it in the team text.</li>
+        </ol>
+
+        {canEdit && <>
+          <h5>Team leads</h5>
+          <ul>
+            <li>Tap <b>Mark ordered</b> on the buy list once you've placed an order, so nobody orders it twice.</li>
+            <li>The <b>Items</b> tab is where you add new items, fix names, set minimums, or archive things we no longer stock. You can also change a minimum by tapping the underlined number on the Count screen.</li>
+            <li><b>Start a new count day</b> (bottom of Results) clears every checkmark and saves today's numbers as the new "last count." Do it <b>right before the next count day</b>, not right after this one, so everyone can still see these results.</li>
+          </ul>
+        </>}
+
+        <p className="help" style={{ marginTop: 14 }}><b>Tip:</b> add the app to your home screen (Safari: Share → Add to Home Screen) so it opens like an app and keeps you signed in.</p>
+        <button className="big primary" type="button" onClick={onClose}>Got it</button>
+      </div>
     </div>
   );
 }
@@ -601,6 +655,11 @@ const GTC_CSS = `
 .gtc .brand{font-family:var(--display);font-size:22px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;line-height:1}
 .gtc .brand small{display:block;font-family:var(--body);font-size:11px;font-weight:500;letter-spacing:.08em;opacity:.7;margin-top:4px;text-transform:uppercase}
 .gtc .hdrbtn{display:block;margin-bottom:8px;border:1px solid rgba(255,255,255,.25);background:transparent;border-radius:8px;padding:5px 10px;font-family:var(--body);font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--bark-fg);min-height:32px}
+.gtc .topright{display:flex;align-items:flex-end;gap:12px}
+.gtc .helpbtn{width:36px;height:36px;border-radius:50%;border:1.5px solid rgba(255,255,255,.35);background:transparent;color:var(--bark-fg);font-weight:700;font-size:17px;line-height:1;flex:none}
+.gtc .help-sheet h5{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin:18px 0 6px}
+.gtc .help-sheet ol,.gtc .help-sheet ul{margin:0;padding-left:20px;display:grid;gap:7px;font-size:15px;line-height:1.4}
+.gtc .help-sheet .help{font-size:14px;margin-top:6px}
 .gtc .prog{font-family:var(--display);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;text-align:right}
 .gtc .prog small{display:block;font-family:var(--body);font-size:11px;font-weight:500;opacity:.7;margin-top:4px}
 .gtc .bar{height:6px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden}
