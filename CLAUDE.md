@@ -42,6 +42,7 @@ Environment on Ken's PC: Git is installed (`C:\Program Files\Git\cmd\git.exe`; r
 ## History of notable fixes (Oct 2026)
 - `cpUnit()` used to return 0 when a product's stock was 0, saving $0 costs. Fixed; old $0 logs backfilled. Backup: `transactions_backup_2026_10_01`.
 - Shortstop logs were entered as total solution instead of product amount (and two as gallons). All 19 moved to `transactions_archive`. Calculators now have a "Log this amount" button that logs product only and refuses non-mL units.
+- Editing a "Direct use" product reset its log unit to the container unit (liter/qt) with `conversion_rate` 1, so mL entries for injectables were costed ~1000x. Fixed Oct 28 (edit form has "Techs Log In"; `calcUsed()` also honors `mix_per` now). Data repaired by hand in SQL Editor: 8 MnJet + 3 Propizol rows recosted to mL; 2 May PhosphoJet rows fixed (May 19 recosted to $4.04; May 15 "0.4 mL" was really 400 mL, amount corrected). Backups: `products_backup_2026_10_28`, `transactions_backup_2026_10_28` (RLS on). Ken still needs to recount MnJet and Propizol stock.
 
 ## Open to-do
 - **GTC:** screen to browse past count days (`gtc_count_history` is already being filled). Possibly limit "Start a new count day" to Manager/Admin.
