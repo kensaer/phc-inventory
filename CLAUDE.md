@@ -30,7 +30,7 @@ Create React App (react-scripts 5) + `@supabase/supabase-js`, deployed on Vercel
 2. Ken tests the preview (it uses the **real** database — tell him what not to submit).
 3. On his OK, fast-forward `main` and push → live.
 
-Environment on Ken's PC: Git is installed (`C:\Program Files\Git\cmd\git.exe`; refresh PATH in PowerShell if `git` isn't found). **Node is not installed**, so there's no local build — the Vercel preview is the build check. GitHub auth goes through Git Credential Manager; if a push can't prompt, have Ken run the push in his terminal once.
+Environment on Ken's PC: Git is installed (`C:\Program Files\Git\cmd\git.exe`; refresh PATH in PowerShell if `git` isn't found). Node is installed (v24, as of Oct 28 2026) but `node_modules` isn't — the project lives in OneDrive, which makes `npm install` very slow, so the Vercel preview is still the build check. Plain-JS helpers can be tested by piping them into `node`. GitHub auth goes through Git Credential Manager; if a push can't prompt, have Ken run the push in his terminal once.
 
 ## Data gotchas
 - A usage log's `product_cost` is computed **at log time** from the product's current settings and never recalculated. Changing a product's cost or units doesn't fix old logs.

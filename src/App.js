@@ -61,7 +61,9 @@ function cvt(amount,from,to){
 function calcUsed(p,gallons){
   const a=parseFloat(gallons)||0;
   if(!p||!a)return 0;
-  return p.mix_rate?(a/100)*p.mix_rate:a;
+  // mix_per is stored as text like "100 gal"; the rate is per that many gallons
+  const per=parseFloat(String(p.mix_per??"").replace(/[^\d.]/g,""))||100;
+  return p.mix_rate?(a/per)*p.mix_rate:a;
 }
 function totalVol(p){
   if(!p.conversion_rate)return p.containers*p.container_size;
@@ -83,8 +85,12 @@ function buildSummary(f){
   if(!cs||!f.container_unit)return null;
   const tv=ct*cs;
   if(!isMix){
-    const cpu=tv>0&&cpc>0?(ct*cpc)/tv:null;
-    return{valid:true,lines:[`📦 ${ct} container${ct!==1?"s":""} × ${cs} ${f.container_unit} = ${fmtN(tv)} ${f.container_unit}`,cpu?`💰 Cost per ${f.container_unit}: ${fmt$(cpu)}`:null,`🔬 Techs log in: ${f.container_unit}`].filter(Boolean)};
+    // Direct-use products can be logged in a smaller unit than the container
+    // (e.g. injectables bought by the liter, applied by the mL).
+    const lu=f.log_unit||f.container_unit,per=cvt(cs,f.container_unit,lu);
+    if(per===null)return{valid:false,error:`Cannot convert ${f.container_unit} → ${lu}.`};
+    const cpu=per>0&&cpc>0?cpc/per:null;
+    return{valid:true,lines:[`📦 ${ct} container${ct!==1?"s":""} × ${cs} ${f.container_unit} = ${fmtN(tv)} ${f.container_unit}`,lu!==f.container_unit?`🔄 1 container = ${fmtN(per)} ${lu}`:null,cpu?`💰 Cost per ${lu}: ${fmt$(cpu)}`:null,`🔬 Techs log in: ${lu}`].filter(Boolean)};
   }
   if(!mr||!f.mix_unit||!f.mix_per)return{valid:false,error:"Enter mix rate, unit, and per-volume."};
   const mp=parseFloat(f.mix_per)||100;
@@ -1098,13 +1104,15 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
   };
 
   const openAddP=()=>{setEditTarget(null);setForm({name:"",category:"Pesticide",division:"phc",product_type:"mixed",containers:"",container_size:"",container_unit:"gal",mix_rate:"",mix_unit:"fl oz",mix_per:"100",cost_per_container:"",reorder_threshold:""});setModal("editProduct");};
-  const openEditP=(p)=>{setEditTarget(p);setForm({...p,product_type:p.mix_rate?"mixed":"direct",mix_rate:p.mix_rate??"",mix_per:p.mix_per?String(p.mix_per).replace(/[^\d.]/g,""):"100"});setModal("editProduct");};
+  const openEditP=(p)=>{setEditTarget(p);setForm({...p,product_type:p.mix_rate?"mixed":"direct",log_unit:p.mix_rate?"":(p.mix_unit||""),mix_rate:p.mix_rate??"",mix_per:p.mix_per?String(p.mix_per).replace(/[^\d.]/g,""):"100"});setModal("editProduct");};
   const submitProduct=async()=>{
     if(!form.name)return showToast("Product name required.","error");
     const s=buildSummary(form);if(s&&!s.valid)return showToast(s.error,"error");
-    const isMix=form.product_type==="mixed",cs=parseFloat(form.container_size)||1,mu=isMix?form.mix_unit:form.container_unit,mp=isMix?(parseFloat(form.mix_per)||100):null,mr=isMix?(parseFloat(form.mix_rate)||null):null;
-    let cr=null;if(isMix){const c=cvt(cs,form.container_unit,mu);cr=c!==null?c/cs:null;}else cr=1;
-    const cleaned={...form,containers:parseFloat(form.containers)||0,container_size:cs,mix_rate:mr,mix_unit:mu,mix_per:mp?`${mp} gal`:null,conversion_rate:cr,cost_per_container:form.cost_per_container!==""?parseFloat(form.cost_per_container):null,division:form.division||"phc",reorder_threshold:form.reorder_threshold!==""&&form.reorder_threshold!=null?parseFloat(form.reorder_threshold):null};
+    // log_unit is form-only (direct-use products store it in mix_unit)
+    const {log_unit,...rest}=form;
+    const isMix=form.product_type==="mixed",cs=parseFloat(form.container_size)||1,mu=isMix?form.mix_unit:(log_unit||form.container_unit),mp=isMix?(parseFloat(form.mix_per)||100):null,mr=isMix?(parseFloat(form.mix_rate)||null):null;
+    const c=cvt(cs,form.container_unit,mu),cr=c!==null?c/cs:null;
+    const cleaned={...rest,containers:parseFloat(form.containers)||0,container_size:cs,mix_rate:mr,mix_unit:mu,mix_per:mp?`${mp} gal`:null,conversion_rate:cr,cost_per_container:form.cost_per_container!==""?parseFloat(form.cost_per_container):null,division:form.division||"phc",reorder_threshold:form.reorder_threshold!==""&&form.reorder_threshold!=null?parseFloat(form.reorder_threshold):null};
     setSaving(true);
     if(editTarget){await onSaveProducts(products.map(p=>p.id===editTarget.id?{...cleaned,id:editTarget.id}:p));showToast(`${form.name} updated`);}
     else{await onSaveProducts([...products,{...cleaned,id:Date.now()}]);showToast(`${form.name} added`);}
@@ -1600,6 +1608,9 @@ function ManagerView({products,blends,transactions,onSave,onSaveBlends,onExit,on
           <div style={{marginBottom:14,borderTop:"1px solid #f3f4f6",paddingTop:12}}>
             <div style={{fontSize:11,fontWeight:700,color:"#4a9e4a",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>③ Application Type</div>
             <div style={{display:"flex",gap:10,marginBottom:10}}>{[["mixed","🧪 Mixed"],["direct","💉 Direct use"]].map(([val,lbl])=><button key={val} onClick={()=>setForm(f=>({...f,product_type:val}))} style={{flex:1,padding:"9px",borderRadius:8,border:`2px solid ${form.product_type===val?"#4a9e4a":"#e5e7eb"}`,background:form.product_type===val?"#f0fdf4":"#f9fafb",color:form.product_type===val?"#166534":"#6b7280",fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer"}}>{lbl}</button>)}</div>
+            {!isMix&&form.container_unit&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+              <FF label="Techs Log In"><select style={iS} value={form.log_unit||form.container_unit} onChange={e=>setForm(f=>({...f,log_unit:e.target.value}))}>{CONTAINER_UNITS.filter(u=>u===form.container_unit||cvt(1,form.container_unit,u)!==null).map(u=><option key={u}>{u}</option>)}</select></FF>
+            </div>}
             {isMix&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
               <FF label="Mix Rate"><input type="number" style={iS} value={form.mix_rate||""} onChange={e=>setForm(f=>({...f,mix_rate:e.target.value}))} placeholder="64" min="0" step="any"/></FF>
               <FF label="Mix Unit"><select style={iS} value={form.mix_unit||"fl oz"} onChange={e=>setForm(f=>({...f,mix_unit:e.target.value}))}>{MIX_UNITS.map(u=><option key={u}>{u}</option>)}</select></FF>
